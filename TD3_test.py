@@ -49,3 +49,36 @@ class Critic(nn.Module):
         q1 = F.relu(self.l2(q1))
         q1 = self.l3(q1)
         return q1
+    
+class TD3:
+    def __init__(
+        self,
+        state_dim,
+        action_dim,
+        max_action,
+        discount=0.99,
+        tau=0.005,
+        policy_noise=0.2,
+        noise_clip=0.5,
+        policy_freq=2
+    ):
+        self.actor = Actor(state_dim, action_dim, max_action).to(device)
+        self.actor_target = copy.deepcopy(self.actor)
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=3e-4)
+
+        self.critic = Critic(state_dim, action_dim).to(device)
+        self.critic_target = copy.deepcopy(self.critic)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
+
+        self.max_action = max_action
+        self.discount = discount
+        self.tau = tau
+        self.policy_noise = policy_noise
+        self.noise_clip = noise_clip
+        self.policy_freq = policy_freq
+
+        self.total_it = 0
+
+    def select_action(self, state):
+        state = torch.FloatTensor(state.reshape(1, -1)).to(device)
+        return self.actor(state).cpu().data.numpy().flatten()
