@@ -130,7 +130,7 @@ class VRXController(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    controller = VRXDRLController()
+    controller = VRXController()
     rclpy.spin(controller)
     controller.destroy_node()
     rclpy.shutdown()
