@@ -50,7 +50,7 @@ class Critic(nn.Module):
         q1 = self.l3(q1)
         return q1
     
-class TD3:
+class TD3(object):
     def __init__(
         self,
         state_dim,
