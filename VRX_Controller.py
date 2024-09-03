@@ -56,4 +56,84 @@ class VRXController(Node):
         self.total_timesteps = 0
         self.max_timesteps = 1000000
         
-    
+    def gps_callback(self, msg):
+        self.gps_data = [msg.latitude, msg.longitude, msg.altitude]
+        
+    def imu_callback(self, msg):
+        self.imu_data = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
+        
+    def task_info_callback(self, msg):
+        self.task_state = msg.state
+        
+    def get_reward(self):
+        # Implement your reward function here
+        # This should be based on the specific objectives of your UASV task
+        return 0.0
+        
+    def control_loop(self):
+        if self.gps_data is None or self.imu_data is None:
+            return
+        
+        # Combine sensor data to form the state
+        self.current_state = np.array(self.gps_data + self.imu_data)
+        
+        # Training process
+        if self.total_timesteps < self.max_timesteps:
+            # Get action from the DRL agent
+            if self.total_timesteps < 10000:  # Initial exploration phase
+                action = np.random.uniform(-self.max_action, self.max_action, size=self.action_dim)
+            else:
+                action = self.drl_agent.select_action(self.current_state)
+                if self.algorithm != 'TD3_BC':  # TD3_BC doesn't need exploration noise during training
+                    noise = np.random.normal(0, self.max_action * 0.1, size=self.action_dim)
+                    action = np.clip(action + noise, -self.max_action, self.max_action)
+            
+            # Apply action to the robot
+            cmd_vel = Twist()
+            cmd_vel.linear.x = action[0]  # Forward velocity
+            cmd_vel.angular.z = action[1]  # Angular velocity
+            self.cmd_vel_pub.publish(cmd_vel)
+            
+            # Observe reward and next state
+            reward = self.get_reward()
+            done = (self.episode_step >= self.max_steps) or (self.task_state == Task.STATE_FINISHED)
+            
+            # Store transition in replay buffer
+            self.replay_buffer.add(self.current_state, action, reward, self.current_state, done)
+            
+            # Train the DRL agent
+            if self.total_timesteps % 50 == 0:
+                self.drl_agent.train(self.replay_buffer, batch_size=256)
+            
+            self.episode_step += 1
+            self.total_timesteps += 1
+            
+            if done:
+                self.reset_simulation()
+        else:
+            # Use the trained policy without exploration
+            action = self.drl_agent.select_action(self.current_state)
+            cmd_vel = Twist()
+            cmd_vel.linear.x = action[0]
+            cmd_vel.angular.z = action[1]
+            self.cmd_vel_pub.publish(cmd_vel)
+        
+    def reset_simulation(self):
+        # Reset episode-specific variables
+        self.episode_step = 0
+        self.gps_data = None
+        self.imu_data = None
+        self.current_state = None
+        
+        # In VRX, you might need to wait for the next task to start
+        # or implement a custom reset service
+
+def main(args=None):
+    rclpy.init(args=args)
+    controller = VRXDRLController()
+    rclpy.spin(controller)
+    controller.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
