@@ -33,7 +33,7 @@ class Critic(nn.Module):
         q = F.relu(self.l2(q))
         return self.l3(q)
 
-class DDPG(object):
+class DDPG():
     def __init__(self, state_dim, action_dim, max_action, discount=0.99, tau=0.005):
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
         self.actor_target = copy.deepcopy(self.actor)
@@ -100,4 +100,3 @@ class DDPG(object):
         self.actor.load_state_dict(torch.load(filename + "_actor"))
         self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
         self.actor_target = copy.deepcopy(self.actor)
-        
