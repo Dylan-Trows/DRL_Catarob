@@ -2,6 +2,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist
+import numpy as np
+
 
 class DRLAgentNode(Node):
     def __init__(self):
@@ -22,3 +24,23 @@ class DRLAgentNode(Node):
         )
     def state_callback(self, msg):
         state = np.array(msg.data)
+        action = self.agent.select_action(state)
+
+        cmd_vel = Twist()
+        cmd_vel.linear.x = action[0]
+        cmd_vel.angular.z = action[1]
+        self.action_pub.publish(cmd_vel)
+
+    def training_loop(self):
+        if len(self.replay_buffer) > batch_size:
+            self.agent.train(self.replay_buffer, batch_size) #log information
+    
+def main(args=None):
+    rclpy.init(args=args)
+    agent_node = DRLAgentNode()
+    rclpy.spin(agent_node)
+    agent_node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
