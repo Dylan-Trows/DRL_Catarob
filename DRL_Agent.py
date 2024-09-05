@@ -8,7 +8,8 @@ from Replay_Buffer import ReplayBuffer
 from TD3_test import TD3
 from DDPG_test import DDPG
 from TD3_BC_test import TD3_BC
-
+from Storage_manager import StorageManager
+from Training_Logger import DataLogger
 
     # msg object is expected to contain an array in its data attribute
     # msg.data[0] typically contains the reward value for the current step.                 
@@ -67,6 +68,11 @@ class DRLAgentNode(Node):
         self.replay_buffer = ReplayBuffer(state_dim=self.state_dim, action_dim=self.action_dim)
         self.performance_evaluator = PerformanceEvaluator()
 
+        # Initialize StorageManager and DataLogger
+        base_path = self.get_parameter('base_path').value
+        self.storage_manager = StorageManager(base_path, self.algorithm, self.get_parameter('stage').value)             #TODO add a "stage" for training/testing
+        self.data_logger = DataLogger(base_path, self.algorithm, self.get_parameter('stage').value)
+
         # using QoS for a robust communication between nodes
         # QoS profile for reliable communication
         qos_profile = QoSProfile(
@@ -105,6 +111,7 @@ class DRLAgentNode(Node):
         self.last_reward = None
         self.total_timesteps = 0
         self.max_timesteps = 1000000
+        
 
     # This callback is called whenever new state information is published,
     # which happens at regular intervals during the simulation.
@@ -135,6 +142,7 @@ class DRLAgentNode(Node):
         if self.current_state is None:                                          # error check (if sim hasnt started yet ?)
             return
 
+
         # Exploration vs Exploitation
         if self.total_timesteps < self.max_timesteps:                           #TODO set self.max_timesteps                           
             action = self.select_action(self.current_state, add_noise=True)     # encouraging exploration
@@ -152,7 +160,17 @@ class DRLAgentNode(Node):
 
         # Train the agent
         if self.total_timesteps % 50 == 0 and len(self.replay_buffer) > 256:    # trains periodically once enough samples in buffer
-            self.train()                                                        #TODO set self.total_timesteps + replay buffer length (batch size)
+            actor_loss, critic_loss = self.train()                                                        #TODO set self.total_timesteps + replay buffer length (batch size)
+            self.data_logger.log_training_info(self.episode_step, actor_loss, critic_loss, self.total_timesteps / self.max_timesteps)
+
+        # Save model periodically
+        if self.episode_step % 1000 == 0:                                       #TODO get self.episode_step from VRX_Controller with state info
+            self.storage_manager.save_model(self.agent, self.episode_step)
+            self.storage_manager.save_replay_buffer(self.replay_buffer, self.episode_step)
+            self.storage_manager.save_metadata({
+                'total_timesteps': self.total_timesteps,
+                'episode': self.episode_step
+            }, self.episode_step)
 
     def select_action(self, state, add_noise=True):                             # gets action from current state
         action = self.agent.select_action(np.array(state))
@@ -164,21 +182,13 @@ class DRLAgentNode(Node):
     def train(self, batch_size=256):                                            #TODO set batch_size
         self.agent.train(self.replay_buffer, batch_size)                        # training algorithm set in the DRL algorithm files
 
-    def save(self, filename):
-        self.agent.save(filename)                                               #TODO make FileManager.py file to manage saving, loading and storing files 
-        np.save(f"{filename}_performance", {
-            'total_reward': self.performance_evaluator.total_reward,
-            'episode_count': self.performance_evaluator.episode_count,
-            'step_count': self.performance_evaluator.step_count
-        })
-
-    def load(self, filename):
-        self.agent.load(filename)
-        if os.path.exists(f"{filename}_performance.npy"):
-            performance_data = np.load(f"{filename}_performance.npy", allow_pickle=True).item()
-            self.performance_evaluator.total_reward = performance_data['total_reward']
-            self.performance_evaluator.episode_count = performance_data['episode_count']
-            self.performance_evaluator.step_count = performance_data['step_count']
+    def load_checkpoint(self, episode):
+        self.storage_manager.load_model(self.agent, episode)
+        self.replay_buffer = self.storage_manager.load_replay_buffer(episode)
+        metadata = self.storage_manager.load_metadata(episode)
+        if metadata:
+            self.total_timesteps = metadata['total_timesteps']
+            self.episode = metadata['episode']
 
 def main(args=None):
     rclpy.init(args=args)
