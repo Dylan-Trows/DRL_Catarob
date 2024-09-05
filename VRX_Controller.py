@@ -74,15 +74,15 @@ class VRXController(Node):
             self.right_thruster_pub.publish(right_thrust_msg)
             
         reward = self.get_reward()
-        done = (self.episode_step >= self.max_steps) or (self.task_state == Task.STATE_FINISHED)
+        done = (self.episode_step >= self.max_steps) or (self.task_state == Task.STATE_FINISHED)            # get reward from reward function
 
         reward_msg = Float64MultiArray()
-        reward_msg.data = [reward, 1.0 if done else 0.0]
+        reward_msg.data = [reward, 1.0 if done else 0.0]                                                    # Publishes reward For the DRL Agent
         self.reward_pub.publish(reward_msg)
         
         self.episode_step += 1
         
-        if done:
+        if done:                                                                                            # incrementing episode count + done flag
             self.reset_episode()
     
     def reset_episode(self):                                                                            #TODO reset logic for reseting environment etc.
