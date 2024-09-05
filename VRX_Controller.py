@@ -1,133 +1,98 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, Imu
-from geometry_msgs.msg import Twist
-from std_msgs.msg import Float32
-from vrx_gazebo.msg import Task
+from std_msgs.msg import Float64, Float32MultiArray, Float64MultiArray
+from vrx_gazebo.msg import Task                         #TODO Implement Task ROS2 Topic?
 import numpy as np
-import torch
-
-from Replay_Buffer import ReplayBuffer
-from TD3_test import TD3
-from DDPG_test import DDPG
-from TD3_BC_test import TD3_BC
+from Waypoint_manager import WaypointManager            #TODO Implement Waypoint manager class
 
 class VRXController(Node):
     def __init__(self):
         super().__init__('vrx_controller')
-
-        # Define state and action dimensions
-        self.state_dim = 7  # 3 for GPS, 4 for IMU orientation
-        self.action_dim = 2  # Forward velocity and angular velocity
-        self.max_action = 1.0  # Assuming for now that actions are normalized between -1 and 1
-
-        # Choose the DRL algorithm to use
-        self.algorithm = 'TD3'  # Options: 'TD3', 'TD3_BC', 'DDPG'
-
-        # Initialize the chosen algorithm
-        if self.algorithm == 'TD3':
-            self.drl_agent = TD3(self.state_dim, self.action_dim, self.max_action)
-        elif self.algorithm == 'TD3_BC':
-            self.drl_agent = TD3_BC(self.state_dim, self.action_dim, self.max_action)
-        elif self.algorithm == 'DDPG':
-            self.drl_agent = DDPG(self.state_dim, self.action_dim, self.max_action)
-        else:
-            raise ValueError(f"Unknown algorithm: {self.algorithm}")
         
-        # Initialize replay buffer
-        self.replay_buffer = ReplayBuffer(state_dim=self.state_dim, action_dim=self.action_dim)
-        
-        # Subscribe to ROS2 subscribers and publishers
+        self.waypoint_manager = WaypointManager()
+
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
-        self.create_subscription(Task, '/vrx/task/info', self.task_info_callback, 10)
+        self.create_subscription(Task, '/vrx/task/info', self.task_info_callback, 10)                       #TODO
+        self.create_subscription(Float64MultiArray, '/vrx/action', self.action_callback, 10)                #TODO
         
-        # Publisher for control commands
-        self.cmd_vel_pub = self.create_publisher(Twist, '/wamv/cmd_vel', 10)
+        self.left_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
+        self.right_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
+        self.state_pub = self.create_publisher(Float32MultiArray, '/vrx/state', 10)
+        self.reward_pub = self.create_publisher(Float64MultiArray, '/vrx/reward', 10)
         
-        # Timer for control loop
-        self.create_timer(0.1, self.control_loop)
-        
-        # Initialize state variables
+        self.create_timer(0.1, self.control_loop)                                                           # Control logic loop timer 
+                                                                                                            #TODO  change if needed
+        # Initialise 
         self.gps_data = None
         self.imu_data = None
+        self.current_waypoint = None
         self.current_state = None
+        self.last_action = None
         self.episode_step = 0
         self.max_steps = 1000
-        self.total_timesteps = 0
-        self.max_timesteps = 1000000
+        self.task_state = None
+
         
-    def gps_callback(self, msg):
+    def gps_callback(self, msg):                                                                            # handle incomming GPS data from environment 
         self.gps_data = [msg.latitude, msg.longitude, msg.altitude]
+        self.waypoint_manager.update_position(self.gps_data)                                                # update waypoint manager with new info
         
-    def imu_callback(self, msg):
+    def imu_callback(self, msg):                                                                            # handles incomming IMU data from environment 
         self.imu_data = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
+                                                                                                            #TODO Maybe also send to waypoint manager to update "heading"
         
-    def task_info_callback(self, msg):
-        self.task_state = msg.state
+    def task_info_callback(self, msg):                                                                      # handles current task state
+        self.task_state = msg.state                                                                         #TODO implement ROS2 topic for Task
+    
+    def action_callback(self, msg):                                                                         # Receives Action from DRL Agent 
+        self.last_action = msg.data
         
-    def get_reward(self):
-        # Implement your reward function here
-        # This should be based on the specific objectives of your UASV task
-        return 0.0
-        
-    def control_loop(self):
-        if self.gps_data is None or self.imu_data is None:
+    def get_reward(self):                                                                                  #TODO Implement my own Reward function class 
+        return 0.0                                                                                         # Distance to current waypoint, Smoothness of trajectory, Energy efficiency, task completion progress etc.
+    
+
+    def control_loop(self):                                                                                 # Main control Loop called by control timer
+        if self.gps_data is None or self.imu_data is None:                                                  # checks if GPS and IMU data are available before proceeding (Simulation/Environment began)
             return
         
-        # Combine sensor data to form the state
-        self.current_state = np.array(self.gps_data + self.imu_data)
+        self.current_waypoint = self.waypoint_manager.get_current_waypoint()                                # current waypoint
+        self.current_state = np.array(self.gps_data + self.imu_data + self.current_waypoint)                # Combines data into single State Array
+
+        state_msg = Float32MultiArray(data=self.current_state.tolist())
+        self.state_pub.publish(state_msg)                                                                   # publishes state for DRL Agent
         
-        # Training process
-        if self.total_timesteps < self.max_timesteps:
-            # Get action from the DRL agent
-            if self.total_timesteps < 10000:  # Initial exploration phase
-                action = np.random.uniform(-self.max_action, self.max_action, size=self.action_dim)
-            else:
-                action = self.drl_agent.select_action(self.current_state)
-                if self.algorithm != 'TD3_BC':  # TD3_BC doesn't need exploration noise during training
-                    noise = np.random.normal(0, self.max_action * 0.1, size=self.action_dim)
-                    action = np.clip(action + noise, -self.max_action, self.max_action)
+        if self.last_action is not None:
+                                                                                                            # checks for available action
+            # Publish thruster commands
+            left_thrust_msg = Float64()
+            right_thrust_msg = Float64()
+            left_thrust_msg.data = self.last_action[0]
+            right_thrust_msg.data = self.last_action[1]
+            self.left_thruster_pub.publish(left_thrust_msg)                                                 # publishes action to control UASV 
+            self.right_thruster_pub.publish(right_thrust_msg)
             
-            # Apply action to the robot
-            cmd_vel = Twist()
-            cmd_vel.linear.x = action[0]  # Forward velocity
-            cmd_vel.angular.z = action[1]  # Angular velocity
-            self.cmd_vel_pub.publish(cmd_vel)
-            
-            # Observe reward and next state
-            reward = self.get_reward()
-            done = (self.episode_step >= self.max_steps) or (self.task_state == Task.STATE_FINISHED)
-            
-            # Store transition in replay buffer
-            self.replay_buffer.add(self.current_state, action, reward, self.current_state, done)
-            
-            # Train the DRL agent
-            if self.total_timesteps % 50 == 0:
-                self.drl_agent.train(self.replay_buffer, batch_size=256)
-            
-            self.episode_step += 1
-            self.total_timesteps += 1
-            
-            if done:
-                self.reset_simulation()
-        else:
-            # Use the trained policy without exploration
-            action = self.drl_agent.select_action(self.current_state)
-            cmd_vel = Twist()
-            cmd_vel.linear.x = action[0]
-            cmd_vel.angular.z = action[1]
-            self.cmd_vel_pub.publish(cmd_vel)
+        reward = self.get_reward()
+        done = (self.episode_step >= self.max_steps) or (self.task_state == Task.STATE_FINISHED)
+
+        reward_msg = Float64MultiArray()
+        reward_msg.data = [reward, 1.0 if done else 0.0]
+        self.reward_pub.publish(reward_msg)
         
-    def reset_simulation(self):
-        # Reset episode-specific variables
+        self.episode_step += 1
+        
+        if done:
+            self.reset_episode()
+    
+    def reset_episode(self):                                                                            #TODO reset logic for reseting environment etc.
         self.episode_step = 0
         self.gps_data = None
         self.imu_data = None
         self.current_state = None
-        
-        # In VRX, you might need to wait for the next task to start
-        # or implement a custom reset service
+        self.last_action = None
+        self.waypoint_manager.reset()
+        # Implement logic to reset the VRX simulation   
 
 def main(args=None):
     rclpy.init(args=args)
