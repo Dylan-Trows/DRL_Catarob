@@ -1,0 +1,1 @@
+#implement WayPoint manager class to manage GPS waipoint tracking for the UASV 
