@@ -9,7 +9,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import NavSatFix, Imu
 from std_msgs.msg import Float64, Float32MultiArray, Float64MultiArray
-from vrx_gazebo.msg import Task                         #TODO Implement Task ROS2 Topic?
+
 import numpy as np
 from Waypoint_manager import WaypointManager            #TODO Implement Waypoint manager class
 import VRXStepData 
@@ -40,7 +40,7 @@ class VRXController(Node):
         self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, sensor_qos)
         
         # Use reliable_qos for task info and action subscriptions
-        self.create_subscription(Task, '/vrx/task/info', self.task_info_callback, reliable_qos)                       #TODO
+        #self.create_subscription(Task, '/vrx/task/info', self.task_info_callback, reliable_qos)                       #TODO
         self.create_subscription(Float64MultiArray, '/vrx/action', self.action_callback, reliable_qos)                #TODO
         
         # Use reliable_qos for publishers
