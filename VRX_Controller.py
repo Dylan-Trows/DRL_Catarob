@@ -1,3 +1,9 @@
+# # VRXStepData.msg
+# float32[] state
+# float32 reward
+# bool done
+# int32 episode_step
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix, Imu
@@ -5,6 +11,7 @@ from std_msgs.msg import Float64, Float32MultiArray, Float64MultiArray
 from vrx_gazebo.msg import Task                         #TODO Implement Task ROS2 Topic?
 import numpy as np
 from Waypoint_manager import WaypointManager            #TODO Implement Waypoint manager class
+import VRXStepData 
 
 class VRXController(Node):
     def __init__(self):
@@ -19,8 +26,10 @@ class VRXController(Node):
         
         self.left_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
         self.right_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
-        self.state_pub = self.create_publisher(Float32MultiArray, '/vrx/state', 10)
-        self.reward_pub = self.create_publisher(Float64MultiArray, '/vrx/reward', 10)
+        #self.state_pub = self.create_publisher(Float32MultiArray, '/vrx/state', 10)
+        #self.reward_pub = self.create_publisher(Float64MultiArray, '/vrx/reward', 10)
+        self.step_publisher = self.create_publisher(VRXStepData, '/vrx/step_data', 10)
+
         
         self.create_timer(0.1, self.control_loop)                                                           # Control logic loop timer 
                                                                                                             #TODO  change if needed
@@ -28,10 +37,10 @@ class VRXController(Node):
         self.gps_data = None
         self.imu_data = None
         self.current_waypoint = None
-        self.current_state = None
+        #self.current_state = None
         self.last_action = None
-        self.episode_step = 0
-        self.max_steps = 1000
+        #self.episode_step = 0
+        #self.max_steps = 1000
         self.task_state = None
 
         
@@ -58,10 +67,11 @@ class VRXController(Node):
             return
         
         self.current_waypoint = self.waypoint_manager.get_current_waypoint()                                # current waypoint
-        self.current_state = np.array(self.gps_data + self.imu_data + self.current_waypoint)                # Combines data into single State Array
 
-        state_msg = Float32MultiArray(data=self.current_state.tolist())
-        self.state_pub.publish(state_msg)                                                                   # publishes state for DRL Agent
+        #move to single custom message
+        '''#self.current_state = np.array(self.gps_data + self.imu_data + self.current_waypoint)                # Combines data into single State Array
+        #state_msg = Float32MultiArray(data=self.current_state.tolist())
+        #elf.state_pub.publish(state_msg)'''                                                                   # publishes state for DRL Agent
         
         if self.last_action is not None:
                                                                                                             # checks for available action
@@ -74,16 +84,25 @@ class VRXController(Node):
             self.right_thruster_pub.publish(right_thrust_msg)
             
         reward = self.get_reward()
-        done = (self.episode_step >= self.max_steps) or (self.task_state == Task.STATE_FINISHED)            # get reward from reward function
+        task_finished = (self.task_state == Task.STATE_FINISHED) #TODO implement task logic
 
-        reward_msg = Float64MultiArray()
-        reward_msg.data = [reward, 1.0 if done else 0.0]                                                    # Publishes reward For the DRL Agent
-        self.reward_pub.publish(reward_msg)
+        step_data = VRXStepData()
+        step_data.gps_data = self.gps_data
+        step_data.imu_data = self.imu_data
+        step_data.current_waypoint = self.current_waypoint
+        step_data.reward = reward
+        step_data.task_finished = task_finished
         
-        self.episode_step += 1
-        
-        if done:                                                                                            # incrementing episode count + done flag
-            self.reset_episode()
+        self.step_publisher.publish(step_data)
+
+        #episode logic moved to DRL Agent 
+        '''#done = (self.episode_step >= self.max_steps) or (self.task_state == Task.STATE_FINISHED)            # get reward from reward function
+        #reward_msg = Float64MultiArray()
+        #reward_msg.data = [reward, 1.0 if done else 0.0]                                                    # Publishes reward For the DRL Agent
+        #self.reward_pub.publish(reward_msg)
+        #self.episode_step += 1
+        #if done:                                                                                            # incrementing episode count + done flag
+        #    self.reset_episode()'''
     
     def reset_episode(self):                                                                            #TODO reset logic for reseting environment etc.
         self.episode_step = 0
