@@ -10,14 +10,14 @@ from DDPG_test import DDPG
 from TD3_BC_test import TD3_BC
 from Storage_manager import StorageManager
 from Training_Logger import DataLogger
-
+import VRXStepData   # add this 
     # msg object is expected to contain an array in its data attribute
     # msg.data[0] typically contains the reward value for the current step.                 
     # msg.data[1] contains a value indicating whether the episode is finished.
 
     # TODO ensure that the msg.data format is correct as assumed 
     
-class PerformanceEvaluator:
+"""class PerformanceEvaluator:
     def __init__(self):
         self.total_reward = 0
         self.episode_count = 0
@@ -35,7 +35,8 @@ class PerformanceEvaluator:
 
     def reset(self):
         self.total_reward = 0
-        self.step_count = 0
+        self.step_count = 0"""
+
 
 class DRLAgentNode(Node):
     def __init__(self):
@@ -66,7 +67,7 @@ class DRLAgentNode(Node):
             raise ValueError(f"Unknown algorithm: {self.algorithm}")
         
         self.replay_buffer = ReplayBuffer(state_dim=self.state_dim, action_dim=self.action_dim)
-        self.performance_evaluator = PerformanceEvaluator()
+        #self.performance_evaluator = PerformanceEvaluator()
 
         # Initialize StorageManager and DataLogger
         base_path = self.get_parameter('base_path').value
@@ -81,7 +82,7 @@ class DRLAgentNode(Node):
             depth=10
         )
 
-        # State Subscriber to fetch the state of the agent
+        '''# State Subscriber to fetch the state of the agent
         self.state_sub = self.create_subscription(
             Float32MultiArray,
             '/vrx/state',
@@ -93,6 +94,14 @@ class DRLAgentNode(Node):
             Float64MultiArray,
             '/vrx/reward',
             self.reward_callback,
+            qos_profile
+        )'''
+
+        # Add custom StepData custom message 
+        self.step_data_sub = self.create_subscription(
+            VRXStepData,
+            '/vrx/step_data',
+            self.step_data_callback,
             qos_profile
         )
 
@@ -111,11 +120,13 @@ class DRLAgentNode(Node):
         self.last_reward = None
         self.total_timesteps = 0
         self.max_timesteps = 1000000
+        self.episode_step = 0
+        self.episode_count = 0
         
 
     # This callback is called whenever new state information is published,
     # which happens at regular intervals during the simulation.
-    def state_callback(self, msg):                                              #  Receives new state information from the environment (VRX simulator or real).
+    '''def state_callback(self, msg):                                              #  Receives new state information from the environment (VRX simulator or real).
         self.current_state = np.array(msg.data)                                 #  Updates the agent's current state.
         if self.last_action is not None and self.last_reward is not None:       
             self.store_transition(self.last_action, self.last_reward)           #  If there's a previous action and reward, it triggers storing the transition.
@@ -129,14 +140,27 @@ class DRLAgentNode(Node):
             self.performance_evaluator.log_episode()
             self.get_logger().info(f"Episode finished. Average reward: {self.performance_evaluator.get_average_reward()}")          
             #  If the episode is done, it logs the episode and prints performance information.
-
-
-
-
-    def store_transition(self, action, reward):
-        self.replay_buffer.add(self.current_state, action, self.current_state, reward, False)       #  Stores the current transition (state, action, next_state, reward, done) in the replay buffer.
-        self.performance_evaluator.log_step(reward)                                                 #  Logs the step's reward for performance evaluation.
+    '''
+    def step_data_callback(self, msg):
+        self.current_state = np.concatenate([msg.gps_data, msg.imu_data, msg.current_waypoint])
+        self.last_reward = msg.reward
         
+        if self.last_action is not None:
+            self.store_transition(self.last_action, self.last_reward, msg.task_finished)
+        
+        if msg.task_finished:
+            self.end_episode()
+    
+    def store_transition(self, action, reward, done):
+        self.replay_buffer.add(self.current_state, action, self.current_state, reward, done)       #  Stores the current transition (state, action, next_state, reward, done) in the replay buffer.
+        #self.performance_evaluator.log_step(reward)                                                 #  Logs the step's reward for performance evaluation.
+        self.episode_step += 1
+
+    def end_episode(self):
+        self.episode_count += 1
+        self.get_logger().info(f"Episode {self.episode_count} finished. Steps: {self.episode_step}")
+        self.episode_step = 0
+        # Add other episode-end logic
 
     def training_loop(self):                                                    # called on timer 
         if self.current_state is None:                                          # error check (if sim hasnt started yet ?)
