@@ -6,6 +6,7 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import NavSatFix, Imu
 from std_msgs.msg import Float64, Float32MultiArray, Float64MultiArray
 from vrx_gazebo.msg import Task                         #TODO Implement Task ROS2 Topic?
@@ -16,19 +17,38 @@ import VRXStepData
 class VRXController(Node):
     def __init__(self):
         super().__init__('vrx_controller')
+
+        # Define QoS profiles
+        sensor_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            durability=DurabilityPolicy.VOLATILE
+        )
+
+        reliable_qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
         
         self.waypoint_manager = WaypointManager()
 
-        self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, 10)
-        self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, 10)
-        self.create_subscription(Task, '/vrx/task/info', self.task_info_callback, 10)                       #TODO
-        self.create_subscription(Float64MultiArray, '/vrx/action', self.action_callback, 10)                #TODO
+        # Use sensor_qos for sensor data subscriptions
+        self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, sensor_qos)
+        self.create_subscription(Imu, '/wamv/sensors/imu/imu/data', self.imu_callback, sensor_qos)
         
-        self.left_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', 10)
-        self.right_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', 10)
+        # Use reliable_qos for task info and action subscriptions
+        self.create_subscription(Task, '/vrx/task/info', self.task_info_callback, reliable_qos)                       #TODO
+        self.create_subscription(Float64MultiArray, '/vrx/action', self.action_callback, reliable_qos)                #TODO
+        
+        # Use reliable_qos for publishers
+        self.left_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/left/thrust', reliable_qos)
+        self.right_thruster_pub = self.create_publisher(Float64, '/wamv/thrusters/right/thrust', reliable_qos)
         #self.state_pub = self.create_publisher(Float32MultiArray, '/vrx/state', 10)
         #self.reward_pub = self.create_publisher(Float64MultiArray, '/vrx/reward', 10)
-        self.step_publisher = self.create_publisher(VRXStepData, '/vrx/step_data', 10)
+        self.step_publisher = self.create_publisher(VRXStepData, '/vrx/step_data', reliable_qos)
 
         
         self.create_timer(0.1, self.control_loop)                                                           # Control logic loop timer 
