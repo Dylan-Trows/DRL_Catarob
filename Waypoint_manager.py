@@ -33,7 +33,7 @@ class WaypointManager:
             wp = self.waypoints[self.current_index]
             distance = self.calculate_distance(current_lat, current_lon, wp.latitude, wp.longitude)
             if distance < self.reached_threshold:
-                self.move_to_next_waypoint()
+                self.move_to_next_waypoint()            #TODO Implement "Done" logic when UASV reaches waypoint
     
     def move_to_next_waypoint(self):
         """Move to the next waypoint."""
@@ -84,3 +84,9 @@ class WaypointManager:
         theta = math.atan2(y, x)
 
         return (math.degrees(theta) + 360) % 360
+
+    @staticmethod
+    def calculate_heading_error(self, current_heading: float, desired_heading: float) -> float:
+        """Calculate the smallest angle between current and desired heading."""
+        error = desired_heading - current_heading
+        return (error + 180) % 360 - 180
