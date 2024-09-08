@@ -9,9 +9,9 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import NavSatFix, Imu
 from std_msgs.msg import Float64, Float32MultiArray, Float64MultiArray
-
+import math
 import numpy as np
-from Waypoint_manager import WaypointManager            #TODO Implement Waypoint manager class
+from Waypoint_manager import WaypointManager            
 import VRXStepData 
 
 class VRXController(Node):
@@ -34,6 +34,7 @@ class VRXController(Node):
         )
         
         self.waypoint_manager = WaypointManager()
+        #TODO Add Example Waypoints here !
 
         # Use sensor_qos for sensor data subscriptions
         self.create_subscription(NavSatFix, '/wamv/sensors/gps/gps/fix', self.gps_callback, sensor_qos)
@@ -54,6 +55,10 @@ class VRXController(Node):
         self.create_timer(0.1, self.control_loop)                                                           # Control logic loop timer 
                                                                                                             #TODO  change if needed
         # Initialise 
+        self.current_lat = 0.0
+        self.current_lon = 0.0
+        self.current_alt = 0.0
+        self.current_heading = 0.0
         self.gps_data = None
         self.imu_data = None
         self.current_waypoint = None
@@ -61,19 +66,36 @@ class VRXController(Node):
         self.last_action = None
         #self.episode_step = 0
         #self.max_steps = 1000
-        self.task_state = None
+        self.task_finished = False
+        self.heading_error = 0.0
 
         
     def gps_callback(self, msg):                                                                            # handle incomming GPS data from environment 
         self.gps_data = [msg.latitude, msg.longitude, msg.altitude]
+        self.current_lat = msg.latitude
+        self.current_lon = msg.longitude
+        self.current_alt = msg.altitude
         self.waypoint_manager.update_position(self.gps_data)                                                # update waypoint manager with new info
-        
+        current_waypoint = self.waypoint_manager.get_current_waypoint()                                     # Get the current waypoint
+        if current_waypoint:
+            desired_heading = self.waypoint_manager.get_desired_heading(self.current_lat, self.current_lon)
+
+            # Calculate heading error
+            self.heading_error = self.waypoint_manager.calculate_heading_error(self.current_heading, desired_heading)
+
+        # Check if we've reached all waypoints
+        if not self.waypoint_manager.has_more_waypoints():
+            self.task_finished = True
+
     def imu_callback(self, msg):                                                                            # handles incomming IMU data from environment 
         self.imu_data = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
-                                                                                                            #TODO Maybe also send to waypoint manager to update "heading"
+        # Extract heading from quaternion
+        x, y, z, w = msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w
+        self.current_heading = math.degrees(math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z)))
+        self.current_heading = (self.current_heading + 360) % 360                                                                                                    
         
     def task_info_callback(self, msg):                                                                      # handles current task state
-        self.task_state = msg.state                                                                         #TODO implement ROS2 topic for Task
+        self.task_state = msg.state                                                                         #TODO implement ROS2 topic for Task (DONE)
     
     def action_callback(self, msg):                                                                         # Receives Action from DRL Agent 
         self.last_action = msg.data
@@ -104,14 +126,14 @@ class VRXController(Node):
             self.right_thruster_pub.publish(right_thrust_msg)
             
         reward = self.get_reward()
-        task_finished = (self.task_state == Task.STATE_FINISHED) #TODO implement task logic
+        #task_finished = (self.task_state == Task.STATE_FINISHED) #TODO implement task logic
 
         step_data = VRXStepData()
         step_data.gps_data = self.gps_data
         step_data.imu_data = self.imu_data
         step_data.current_waypoint = self.current_waypoint
         step_data.reward = reward
-        step_data.task_finished = task_finished
+        step_data.task_finished = self.task_finished
         
         self.step_publisher.publish(step_data)
 

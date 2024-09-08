@@ -33,7 +33,7 @@ class WaypointManager:
             wp = self.waypoints[self.current_index]
             distance = self.calculate_distance(current_lat, current_lon, wp.latitude, wp.longitude)
             if distance < self.reached_threshold:
-                self.move_to_next_waypoint()            #TODO Implement "Done" logic when UASV reaches waypoint
+                self.move_to_next_waypoint()            
     
     def move_to_next_waypoint(self):
         """Move to the next waypoint."""
