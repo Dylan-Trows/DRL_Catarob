@@ -44,9 +44,9 @@ class DRLAgentNode(Node):
 
         # TODO make a hyperparameters.py program to handle the settings of the algorithms
         # Declare parameters
-        self.declare_parameter('state_dim', 9)
+        self.declare_parameter('state_dim', 11)
         self.declare_parameter('action_dim', 2)
-        self.declare_parameter('max_action', 10.0)      #TODO determine the max thruster values of the CATAROB etc.
+        self.declare_parameter('max_action', 5000.0)      #TODO determine the max thruster values of the CATAROB etc.
         self.declare_parameter('algorithm', 'TD3')
         
         # Get parameters
@@ -142,7 +142,7 @@ class DRLAgentNode(Node):
             #  If the episode is done, it logs the episode and prints performance information.
     '''
     def step_data_callback(self, msg):
-        self.current_state = np.concatenate([msg.gps_data, msg.imu_data, msg.current_waypoint])
+        self.current_state = np.concatenate([msg.gps_data, msg.imu_data, msg.current_waypoint, msg.current_heading, msg.heading_error])
         self.last_reward = msg.reward
         
         if self.last_action is not None:

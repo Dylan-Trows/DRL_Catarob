@@ -55,9 +55,6 @@ class VRXController(Node):
         self.create_timer(0.1, self.control_loop)                                                           # Control logic loop timer 
                                                                                                             #TODO  change if needed
         # Initialise 
-        self.current_lat = 0.0
-        self.current_lon = 0.0
-        self.current_alt = 0.0
         self.current_heading = 0.0
         self.gps_data = None
         self.imu_data = None
@@ -72,9 +69,6 @@ class VRXController(Node):
         
     def gps_callback(self, msg):                                                                            # handle incomming GPS data from environment 
         self.gps_data = [msg.latitude, msg.longitude, msg.altitude]
-        self.current_lat = msg.latitude
-        self.current_lon = msg.longitude
-        self.current_alt = msg.altitude
         self.waypoint_manager.update_position(self.gps_data)                                                # update waypoint manager with new info
         current_waypoint = self.waypoint_manager.get_current_waypoint()                                     # Get the current waypoint
         if current_waypoint:
@@ -101,7 +95,14 @@ class VRXController(Node):
         self.last_action = msg.data
         
     def get_reward(self):                                                                                  #TODO Implement my own Reward function class 
-        return 0.0                                                                                         # Distance to current waypoint, Smoothness of trajectory, Energy efficiency, task completion progress etc.
+        reward = 0
+        # Reward for being on the correct heading
+        reward += math.cos(math.radians(self.heading_error))
+        
+        if self.task_finished == True :
+            reward += 100
+        
+        return reward                                                                                         # Distance to current waypoint, Smoothness of trajectory, Energy efficiency, task completion progress etc.
     
 
     def control_loop(self):                                                                                 # Main control Loop called by control timer
@@ -134,7 +135,10 @@ class VRXController(Node):
         step_data.current_waypoint = self.current_waypoint
         step_data.reward = reward
         step_data.task_finished = self.task_finished
-        
+
+        step_data.heading_error = self.heading_error
+        step_data.current_heading = self.current_heading
+
         self.step_publisher.publish(step_data)
 
         #episode logic moved to DRL Agent 
