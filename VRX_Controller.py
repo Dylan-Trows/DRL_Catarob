@@ -12,7 +12,7 @@ from std_msgs.msg import Float64, Float32MultiArray, Float64MultiArray
 import math
 import numpy as np
 from Waypoint_manager import WaypointManager            
-import VRXStepData 
+from mock_VRXStepData import VRXStepData 
 
 class VRXController(Node):
     def __init__(self):
