@@ -39,7 +39,7 @@ from Training_Logger import DataLogger
 
 
 class DRLAgentNode(Node):
-    def __init__(self):
+    def __init__(self, testing_mode=False):
         super().__init__('drl_agent_node')
 
         # TODO make a hyperparameters.py program to handle the settings of the algorithms
@@ -48,7 +48,7 @@ class DRLAgentNode(Node):
         self.declare_parameter('action_dim', 2)
         self.declare_parameter('max_action', 5000.0)      #TODO determine the max thruster values of the CATAROB etc.
         self.declare_parameter('algorithm', 'TD3')
-        
+        self.testing_mode = testing_mode
         # Get parameters
         self.state_dim = self.get_parameter('state_dim').value
         self.action_dim = self.get_parameter('action_dim').value
@@ -183,7 +183,7 @@ class DRLAgentNode(Node):
         self.total_timesteps += 1
 
         # Train the agent
-        if self.total_timesteps % 50 == 0 and len(self.replay_buffer) > 256:    # trains periodically once enough samples in buffer
+        if self.testing_mode or (self.total_timesteps % 50 == 0 and len(self.replay_buffer) > 256):    # trains periodically once enough samples in buffer
             actor_loss, critic_loss = self.train()                                                        #TODO set self.total_timesteps + replay buffer length (batch size)
             self.data_logger.log_training_info(self.episode_step, actor_loss, critic_loss, self.total_timesteps / self.max_timesteps)
 
