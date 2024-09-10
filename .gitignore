@@ -1,0 +1,15 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+
+# Colcon artifacts
+.colcon_cd_root
+
+# Python artifacts
+*.py[cod]
+__pycache__/
+*.so
+
+# Visual Studio Code
+.vscode/
