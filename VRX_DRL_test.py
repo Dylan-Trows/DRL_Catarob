@@ -19,7 +19,7 @@ from Replay_Buffer import ReplayBuffer
 from Training_Logger import DataLogger
 from Waypoint_manager import WaypointManager
 from TD3_test import TD3
-from mock_VRXStepData import VRXStepData
+from catarob_drl.msg import VRXStepData
 #import VRXStepData
 
 # Mock ROS2 specific modules

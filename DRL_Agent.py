@@ -10,7 +10,7 @@ from DDPG_test import DDPG
 from TD3_BC_test import TD3_BC
 from Storage_manager import StorageManager
 from Training_Logger import DataLogger
-from mock_VRXStepData import VRXStepData   # add this from my_package.msg import VRXStepData
+from catarob_drl.msg import VRXStepData   # add this from my_package.msg import VRXStepData
     # msg object is expected to contain an array in its data attribute
     # msg.data[0] typically contains the reward value for the current step.                 
     # msg.data[1] contains a value indicating whether the episode is finished.
