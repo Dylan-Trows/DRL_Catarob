@@ -3,8 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#"cuda" if torch.cuda.is_available() else 
+device = torch.device("cpu")
 
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action):
@@ -115,6 +115,8 @@ class TD3():
         critic_loss.backward()
         self.critic_optimizer.step()
 
+        actor_loss = None
+
         # Delayed policy updates
         if self.total_it % self.policy_freq == 0:
             # Compute actor loss
@@ -131,17 +133,22 @@ class TD3():
 
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-    '''
+        
+        return actor_loss.item() if actor_loss is not None else None, critic_loss.item()                # return actor and critic loss for data logging
+    
     def save(self, filename):
         torch.save(self.critic.state_dict(), filename + "_critic")
         torch.save(self.critic_optimizer.state_dict(), filename + "_critic_optimizer")
+        torch.save(self.critic_target.state_dict(), filename + "_critic_target")
         torch.save(self.actor.state_dict(), filename + "_actor")
         torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
+        torch.save(self.actor_target.state_dict(), filename + "_actor_target")
 
     def load(self, filename):
         self.critic.load_state_dict(torch.load(filename + "_critic"))
         self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer"))
+        self.critic_target.load_state_dict(torch.load(filename + "_critic_target"))
         self.critic_target = copy.deepcopy(self.critic)
         self.actor.load_state_dict(torch.load(filename + "_actor"))
         self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
-        self.actor_target = copy.deepcopy(self.actor)'''
+        self.actor_target.load_state_dict(torch.load(filename + "_actor_target"))
