@@ -20,14 +20,14 @@ class StorageManager:
             os.makedirs(directory)
     
     def save_model(self, model, episode):                                                                           # using torch.save() to save model's state dictionary
-        model_path = os.path.join(self.model_dir, f"{self.algorithm}_stage{self.stage}_episode{episode}.pt")        # saving snapshots of model at different stages of training
-        torch.save(model.state_dict(), model_path)
+        model_path = os.path.join(self.model_dir, f"{self.algorithm}_stage{self.stage}_episode{episode}")        # saving snapshots of model at different stages of training
+        model.save(model_path)
         print(f"Model saved to {model_path}")
     
     def load_model(self, model, episode):                                                                           # restore previously saved model
-        model_path = os.path.join(self.model_dir, f"{self.algorithm}_stage{self.stage}_episode{episode}.pt")        # allows resuming training from previous point or load for evaluation
-        if os.path.exists(model_path):
-            model.load_state_dict(torch.load(model_path))
+        model_path = os.path.join(self.model_dir, f"{self.algorithm}_stage{self.stage}_episode{episode}")        # allows resuming training from previous point or load for evaluation
+        if os.path.exists(model_path + "_actor"):
+            model.load(model_path)
             print(f"Model loaded from {model_path}")
         else:
             print(f"No model found at {model_path}")
