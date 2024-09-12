@@ -56,7 +56,8 @@ class DataLogger:
                 f.write("Episode,ActorLoss,CriticLoss,Epsilon\n")
         
         with open(training_log_file, 'a') as f:
-            f.write(f"{episode},{actor_loss:.6f},{critic_loss:.6f},{epsilon:.4f}\n")
+            actor_loss_str = f"{actor_loss:.6f}" if actor_loss is not None else "None"
+            f.write(f"{episode},{actor_loss_str},{critic_loss:.6f},{epsilon:.4f}\n")
 
     def log_test_results(self, num_episodes, success_rate, avg_reward, avg_length):
         test_log_file = os.path.join(self.log_dir, f"{self.algorithm}_test_results_stage{self.stage}_{self.current_time}.txt")
