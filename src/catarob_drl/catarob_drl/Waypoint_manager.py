@@ -4,11 +4,11 @@ import math
 from typing import List, Tuple
 
 class Waypoint:
-    def __init__(self, latitude: float, longitude: float, altitude: float, heading: float = None):
+    def __init__(self, latitude: float, longitude: float, altitude: float):
         self.latitude = latitude
         self.longitude = longitude
         self.altitude = altitude
-        self.heading = heading
+        
 
 class WaypointManager:
     def __init__(self):
@@ -16,15 +16,15 @@ class WaypointManager:
         self.current_index: int = 0
         self.reached_threshold: float = 5.0  # meters
 
-    def add_waypoint(self, latitude: float, longitude: float, altitude: float, heading: float = None):
+    def add_waypoint(self, latitude: float, longitude: float, altitude: float):
         """Add a new waypoint to the list."""
-        self.waypoints.append(Waypoint(latitude, longitude, altitude, heading))
+        self.waypoints.append(Waypoint(latitude, longitude, altitude))
 
-    def get_current_waypoint(self) -> Tuple[float, float, float, float]:
+    def get_current_waypoint(self) -> List[float]:
         """Get the current waypoint data."""
         if self.current_index < len(self.waypoints):
             wp = self.waypoints[self.current_index]
-            return wp.latitude, wp.longitude, wp.altitude, wp.heading
+            return [wp.latitude, wp.longitude, wp.altitude]
         return None
     
     def update_position(self, current_lat: float, current_lon: float, current_alt: float):
@@ -82,11 +82,11 @@ class WaypointManager:
         x = math.cos(phi1) * math.sin(phi2) - \
             math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda)
         theta = math.atan2(y, x)
-
+        print("Theta = ", theta)                                                                # print statement for testing
         return (math.degrees(theta) + 360) % 360
 
     @staticmethod
-    def calculate_heading_error(self, current_heading: float, desired_heading: float) -> float:
+    def calculate_heading_error(current_heading: float, desired_heading: float) -> float:
         """Calculate the smallest angle between current and desired heading."""
         error = desired_heading - current_heading
         return (error + 180) % 360 - 180
