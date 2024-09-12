@@ -10,12 +10,7 @@ from .DDPG_test import DDPG
 from .TD3_BC_test import TD3_BC
 from .Storage_manager import StorageManager
 from .Training_Logger import DataLogger
-from catarob_drl_interfaces.msg import VRXStepData   # add this from my_package.msg import VRXStepData
-    # msg object is expected to contain an array in its data attribute
-    # msg.data[0] typically contains the reward value for the current step.                 
-    # msg.data[1] contains a value indicating whether the episode is finished.
-
-    # TODO ensure that the msg.data format is correct as assumed 
+from catarob_drl_interfaces.msg import VRXStepData
     
 """class PerformanceEvaluator:
     def __init__(self):
@@ -36,7 +31,6 @@ from catarob_drl_interfaces.msg import VRXStepData   # add this from my_package.
     def reset(self):
         self.total_reward = 0
         self.step_count = 0"""
-
 
 class DRLAgentNode(Node):
     def __init__(self, testing_mode=False):
@@ -85,21 +79,6 @@ class DRLAgentNode(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL
         )
 
-        '''# State Subscriber to fetch the state of the agent
-        self.state_sub = self.create_subscription(
-            Float32MultiArray,
-            '/vrx/state',
-            self.state_callback,
-            qos_profile
-        )
-        # Reward Subscriber to retrieve the reward for state s/s'
-        self.reward_sub = self.create_subscription(
-            Float64MultiArray,
-            '/vrx/reward',
-            self.reward_callback,
-            qos_profile
-        )'''
-
         # Add custom StepData custom message 
         self.step_data_sub = self.create_subscription(
             VRXStepData,
@@ -125,25 +104,7 @@ class DRLAgentNode(Node):
         self.max_timesteps = 1000000
         self.episode_step = 0
         self.episode_count = 0
-        
-
-    # This callback is called whenever new state information is published,
-    # which happens at regular intervals during the simulation.
-    '''def state_callback(self, msg):                                              #  Receives new state information from the environment (VRX simulator or real).
-        self.current_state = np.array(msg.data)                                 #  Updates the agent's current state.
-        if self.last_action is not None and self.last_reward is not None:       
-            self.store_transition(self.last_action, self.last_reward)           #  If there's a previous action and reward, it triggers storing the transition.
     
-    
-    def reward_callback(self, msg):                                             #  Receives reward information from the environment.
-        self.last_reward = msg.data[0]                                          #  Updates the agent's last received reward.
-        done = msg.data[1] > 0.5           # binary classification (True/False)     
-                                           # done can be configured : final waypoint, too far off path, max. time limit                                
-        if done:                                                                #  Checks if the episode is done (finished).
-            self.performance_evaluator.log_episode()
-            self.get_logger().info(f"Episode finished. Average reward: {self.performance_evaluator.get_average_reward()}")          
-            #  If the episode is done, it logs the episode and prints performance information.
-    '''
     def step_data_callback(self, msg):
         gps_data = np.array(msg.gps_data, dtype=np.float32)
         imu_data = np.array(msg.imu_data, dtype=np.float32)
@@ -161,7 +122,7 @@ class DRLAgentNode(Node):
             self.end_episode()
     
     def store_transition(self, action, reward, done):
-        self.replay_buffer.add(self.current_state, action, self.current_state, reward, done)       #  Stores the current transition (state, action, next_state, reward, done) in the replay buffer.
+        self.replay_buffer.add(self.current_state, action, self.current_state, reward, done)         #  Stores the current transition (state, action, next_state, reward, done) in the replay buffer.
         #self.performance_evaluator.log_step(reward)                                                 #  Logs the step's reward for performance evaluation.
         self.episode_step += 1
 
