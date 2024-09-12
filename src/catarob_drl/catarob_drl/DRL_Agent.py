@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray, Float64MultiArray
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 import numpy as np
 import torch
 from .Replay_Buffer import ReplayBuffer
@@ -44,9 +44,9 @@ class DRLAgentNode(Node):
 
         # TODO make a hyperparameters.py program to handle the settings of the algorithms
         # Declare parameters
-        self.declare_parameter('state_dim', 11)
+        self.declare_parameter('state_dim', 12)
         self.declare_parameter('action_dim', 2)
-        self.declare_parameter('max_action', 5000.0)      #TODO determine the max thruster values of the CATAROB etc.
+        self.declare_parameter('max_action', 50.0)      #TODO determine the max thruster values of the CATAROB etc.
         self.declare_parameter('algorithm', 'TD3')
         self.declare_parameter('stage','Test')
         self.testing_mode = testing_mode
@@ -81,7 +81,8 @@ class DRLAgentNode(Node):
         qos_profile = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
-            depth=10
+            depth=10,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
         )
 
         '''# State Subscriber to fetch the state of the agent
@@ -144,7 +145,13 @@ class DRLAgentNode(Node):
             #  If the episode is done, it logs the episode and prints performance information.
     '''
     def step_data_callback(self, msg):
-        self.current_state = np.concatenate([msg.gps_data, msg.imu_data, msg.current_waypoint, msg.current_heading, msg.heading_error])
+        gps_data = np.array(msg.gps_data, dtype=np.float32)
+        imu_data = np.array(msg.imu_data, dtype=np.float32)
+        current_waypoint = np.array(msg.current_waypoint, dtype=np.float32)
+        current_heading = np.array([msg.current_heading], dtype=np.float32)
+        heading_error = np.array([msg.heading_error], dtype=np.float32)
+        
+        self.current_state = np.concatenate([gps_data, imu_data, current_waypoint, current_heading, heading_error])
         self.last_reward = msg.reward
         
         if self.last_action is not None:
@@ -169,15 +176,17 @@ class DRLAgentNode(Node):
             return
 
 
-        # Exploration vs Exploitation
-        if self.total_timesteps < self.max_timesteps:                           #TODO set self.max_timesteps                           
-            action = self.select_action(self.current_state, add_noise=True)     # encouraging exploration
-        else:
-            action = self.select_action(self.current_state, add_noise=False)    # excouraging exploitation
+        # # Exploration vs Exploitation
+        # if self.total_timesteps < self.max_timesteps:                           #TODO set self.max_timesteps                           
+        #     action = self.select_action(self.current_state, add_noise=False)     # encouraging exploration
+        # else:
+        #     action = self.select_action(self.current_state, add_noise=False)    # excouraging exploitation
 
+        action = self.select_action(self.current_state, add_noise=False) 
         # Publish action
         action_msg = Float64MultiArray()
         action_msg.data = action.tolist()
+        print("Action : ", action_msg.data)
         self.action_pub.publish(action_msg)
 
         # Update training state
@@ -185,8 +194,10 @@ class DRLAgentNode(Node):
         self.total_timesteps += 1
 
         # Train the agent
-        if self.testing_mode or (self.total_timesteps % 50 == 0 and len(self.replay_buffer) > 256):    # trains periodically once enough samples in buffer
+        if self.testing_mode or (self.total_timesteps % 50 == 0 and self.replay_buffer.size > 256):    # trains periodically once enough samples in buffer
+            print("Training now")
             actor_loss, critic_loss = self.train()                                                        #TODO set self.total_timesteps + replay buffer length (batch size)
+            print("training done")
             self.data_logger.log_training_info(self.episode_step, actor_loss, critic_loss, self.total_timesteps / self.max_timesteps)
 
         # Save model periodically
@@ -198,7 +209,7 @@ class DRLAgentNode(Node):
                 'episode': self.episode_step
             }, self.episode_step)
 
-    def select_action(self, state, add_noise=True):                             # gets action from current state
+    def select_action(self, state, add_noise=False):                             # gets action from current state
         action = self.agent.select_action(np.array(state))
         if add_noise:                                                           # adds gaussian noise to encourage exploration
             noise = np.random.normal(0, self.max_action * 0.1, size=self.action_dim)
@@ -206,7 +217,8 @@ class DRLAgentNode(Node):
         return action
 
     def train(self, batch_size=256):                                            #TODO set batch_size
-        self.agent.train(self.replay_buffer, batch_size)                        # training algorithm set in the DRL algorithm files
+        actor_loss, critic_loss = self.agent.train(self.replay_buffer, batch_size)                        # training algorithm set in the DRL algorithm files
+        return actor_loss, critic_loss
 
     def load_checkpoint(self, episode):
         self.storage_manager.load_model(self.agent, episode)
