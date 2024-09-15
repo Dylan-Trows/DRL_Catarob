@@ -48,7 +48,7 @@ class VRXController(Node):
         self.create_timer(0.1, self.control_loop)                                                           # Control logic loop timer 
                                                                                                             #TODO  change loop frquency if needed
         # Initialise 
-        self.current_heading = 0.0
+        self.current_heading = None
         self.gps_data = None
         self.imu_data = None
         self.current_waypoint = None
@@ -58,6 +58,9 @@ class VRXController(Node):
         self.heading_error = 0.0
         self.previous_distance = None
         self.maximum_distance = None
+        self.alpha = 1
+        self.beta = 1
+        self.max_speed = 2
 
         
     def gps_callback(self, msg):                                                                            # handle incomming GPS data from environment 
@@ -77,9 +80,10 @@ class VRXController(Node):
 
             desired_heading = self.waypoint_manager.get_desired_heading(msg.latitude, msg.longitude)
             print("desired heading : ", desired_heading)
-            print("current heading : ", self.current_heading)
-            # Calculate heading error
-            self.heading_error = self.waypoint_manager.calculate_heading_error(self.current_heading, desired_heading)       # Get Heading error for Reward function
+            if self.current_heading is not None:
+                print("current heading : ", self.current_heading)
+                # Calculate heading error
+                self.heading_error = self.waypoint_manager.calculate_heading_error(self.current_heading, desired_heading)       # Get Heading error for Reward function
 
         # Check if we've reached all waypoints
         if not self.waypoint_manager.has_more_waypoints():
@@ -99,23 +103,47 @@ class VRXController(Node):
     def action_callback(self, msg):                                                                         # Receives Action from DRL Agent 
         self.last_action = msg.data
         
-    def get_reward(self):                                                                                   #TODO Implement my own Reward function class 
+    def get_reward(self):                                                                                    
         reward = 0.0
-        # Reward for being on the correct heading
-        #reward += math.cos(math.radians(self.heading_error))
-        if self.heading_error < 10:
-            reward += 1
-        else :
-            reward -= 1
-        # 2. Reward for getting closer to the target                                                        # TODO Implement logic to compare distance to Original distance!
-        if self.previous_distance is not None:
-            distance_to_target = self.waypoint_manager.calculate_distance(self.gps_data[0],self.gps_data[1], self.current_waypoint[0] , self.current_waypoint[1])
-            distance_reward = self.previous_distance - distance_to_target
-            reward += 5 * distance_reward  # Scale factor of 5 to emphasize progress towards the goal
-            self.previous_distance = distance_to_target
-        else:
-            if self.current_waypoint is not None:
-                self.previous_distance = self.waypoint_manager.calculate_distance(self.gps_data[0],self.gps_data[1], self.current_waypoint[0] , self.current_waypoint[1])
+        if self.current_waypoint is None or self.gps_data is None or self.last_action is None:
+            return 0.0
+
+        # 1. Distance Reward 
+            
+        # Calculate arc length
+        l_arc = self.previous_distance * math.radians(abs(self.heading_error))
+
+        # Normalize distances
+        normalized_d_target = self.previous_distance / self.maximum_distance
+        normalized_l_arc = l_arc / (math.pi * self.previous_distance)
+
+        # Weights for arc and distance to target
+        w_arc = 0.5
+        w_dist = 0.5
+
+        # Calculate weighted distance
+        distance = w_arc * normalized_l_arc + w_dist * normalized_d_target                                  # Incorporating Heading Error and distance to target into reward.
+
+        distance_reward = -self.alpha * math.tanh(distance - 1)
+        reward += distance_reward                                                                            
+
+        # 2. Velocity reward
+         
+        forward_speed = self.last_action[0]                                                                 # get_forward_speed()
+        speed_heading_reward = (forward_speed * math.cos(math.radians(self.heading_error))) / self.max_speed
+        
+        # Option 1: Use the speed-heading reward directly
+        movement_reward = self.beta * speed_heading_reward
+
+        # Option 2: Apply the 1-e^(-v) function to shape the reward
+        # v = abs(speed_heading_reward)  # Use absolute value to handle negative rewards
+        # movement_reward = self.beta * (1 - math.exp(-v))
+        # if speed_heading_reward < 0:
+        #     movement_reward = -movement_reward  # Preserve the sign
+
+        # Combine rewards 
+        reward += movement_reward
+
 
         # 3. Penalty for energy usage (assuming self.last_action contains thruster values)                  # TODO Think of logic for energy consumption / smoothness of trajectories
         if self.last_action is not None:
