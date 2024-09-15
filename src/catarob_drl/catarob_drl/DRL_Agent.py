@@ -162,13 +162,13 @@ class DRLAgentNode(Node):
             self.data_logger.log_training_info(self.episode_step, actor_loss, critic_loss, self.total_timesteps / self.max_timesteps)
 
         # Save model periodically
-        if self.episode_step % 1000 == 0:                                       #TODO get self.episode_step from VRX_Controller with state info
-            self.storage_manager.save_model(self.agent, self.episode_step)
-            self.storage_manager.save_replay_buffer(self.replay_buffer, self.episode_step)
+        if self.total_timesteps % 1000 == 0:                                       #TODO get self.episode_step from VRX_Controller with state info
+            self.storage_manager.save_model(self.agent, self.total_timesteps)
+            self.storage_manager.save_replay_buffer(self.replay_buffer, self.total_timesteps)
             self.storage_manager.save_metadata({
                 'total_timesteps': self.total_timesteps,
-                'episode': self.episode_step
-            }, self.episode_step)
+                'episode': self.episode_count
+            }, self.total_timesteps)
 
     def select_action(self, state, add_noise=False):                             # gets action from current state
         action = self.agent.select_action(np.array(state))
