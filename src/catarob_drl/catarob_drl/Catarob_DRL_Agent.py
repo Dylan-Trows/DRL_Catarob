@@ -11,7 +11,7 @@ from .DDPG_test import DDPG
 from .TD3_BC_test import TD3_BC
 from .Storage_manager import StorageManager
 from .Training_Logger import DataLogger
-from catarob_drl_interfaces.msg import RealCatarobStepData
+from catarob_drl_interfaces.msg import CatarobStepData
 
 class CatarobDRLAgentNode(Node):
     def __init__(self, testing_mode=False):
@@ -50,15 +50,14 @@ class CatarobDRLAgentNode(Node):
 
         # QoS profile       
         qos_profile = QoSProfile(                                                                                                           #TODO change the QoS profile for the catarob
-            reliability=ReliabilityPolicy.RELIABLE,         
+            reliability=ReliabilityPolicy.BEST_EFFORT,         
             history=HistoryPolicy.KEEP_LAST,
-            depth=10,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL
+            depth=1,
         )
 
         # Update subscriptions and publishers
         self.step_data_sub = self.create_subscription(
-            RealCatarobStepData,
+            CatarobStepData,
             '/catarob/step_data',
             self.step_data_callback,
             qos_profile
@@ -74,13 +73,14 @@ class CatarobDRLAgentNode(Node):
         self.create_timer(0.25, self.training_loop)  # 4 Hz to match sensor data rate
 
         # Initialize state variables (unchanged)
-        self.current_state = None
-        self.last_action = None
+        self.previous_state = None
+        self.previous_action = None
         self.last_reward = None
         self.total_timesteps = 0
         self.max_timesteps = 1000000
         self.episode_step = 0
         self.episode_count = 0
+        self.episode_reward = 0.0
     
     def step_data_callback(self, msg):
         # Update state representation
@@ -89,46 +89,72 @@ class CatarobDRLAgentNode(Node):
         current_waypoint = np.array(msg.current_waypoint, dtype=np.float32)
         heading_error = np.array([msg.heading_error], dtype=np.float32)
         
-        self.current_state = np.concatenate([gps_data, current_heading, current_waypoint, heading_error])
+        current_state = np.concatenate([gps_data, current_heading, current_waypoint, heading_error])
+
+        reward = msg.reward
+        done = msg.task_finished
+
+        # Store transition if we have a previous state and action
+        if self.previous_state is not None and self.previous_action is not None:
+            self.store_transition(self.previous_state, self.previous_action, reward, current_state, done)
+
+        # Update previous state
+        self.previous_state = current_state
+
+        # Select and publish new action
+        action = self.select_action(current_state)
+        self.publish_action(action)
+
+        # Update previous action
+        self.previous_action = action
+
+        # Update episode information
+        self.episode_step += 1
+        self.episode_reward += reward
+            
         self.last_reward = msg.reward
         
-        if self.last_action is not None:
-            self.store_transition(self.last_action, self.last_reward, msg.task_finished)
-        
-        if msg.task_finished:
+        if done:
             self.end_episode()
     
-    def store_transition(self, action, reward, done):
-        self.replay_buffer.add(self.current_state, action, self.current_state, reward, done)         #  Stores the current transition (state, action, next_state, reward, done) in the replay buffer.
+    def store_transition(self, state, action, reward, next_state, done):
+        self.replay_buffer.add(state, action, next_state, reward, done)         #  Stores the current transition (state, action, next_state, reward, done) in the replay buffer.
                                                                                                      #  Logs the step's reward for performance evaluation.
-        self.episode_step += 1
+
+    def select_action(self, state, add_noise=False):                                                        # gets action from current state
+        action = self.agent.select_action(np.array(state))
+        if self.testing_mode:
+            return action
+        if add_noise:                                                                                       # adds gaussian noise to encourage exploration
+            noise = np.random.normal(0, self.max_action * 0.1, size=self.action_dim)
+            action = np.clip(action + noise, -self.max_action, self.max_action)                             # clipped to stay within allowed range
+        return action
+    
     # The rest of the methods (store_transition, end_episode, training_loop, select_action, train, load_checkpoint)
     # remain largely unchanged. You may need to adjust the action publishing in the training_loop:
 
     def end_episode(self):
         self.episode_count += 1
-        self.get_logger().info(f"Episode {self.episode_count} finished. Steps: {self.episode_step}")
+        self.get_logger().info(f"Episode {self.episode_count} finished. Steps: {self.episode_step}, Reward: {self.episode_reward}")
         self.episode_step = 0
-        # Add other episode-end logic
+        self.episode_reward = 0
+        self.previous_state = None
+        self.previous_action = None
+
+    def publish_action(self, action):
+        cmd_vel = Twist()
+        cmd_vel.linear.x = action.tolist()[0] * self.max_action
+        cmd_vel.angular.z = action.tolist()[1] * 0.8
+        self.action_pub(cmd_vel)
 
     def training_loop(self):                                                                         # called on timer 
         if self.current_state is None:                                                               # error check (if sim hasnt started yet ?)
             return
-
-        action = self.select_action(self.current_state, add_noise=False)
         
-        # Publish action as Twist message
-        action_msg = Twist()
-        action_msg.linear.x = action.tolist()[0] * self.max_action  # normalized action
-        action_msg.angular.z = action.tolist()[1] * self.max_action
-        self.action_pub.publish(action_msg)
-
-        # Update training state
-        self.last_action = action
         self.total_timesteps += 1
 
         # Train the agent (unchanged)
-        if self.testing_mode or (self.total_timesteps % 50 == 0 and self.replay_buffer.size > 256):
+        if not self.testing_mode and (self.total_timesteps % 50 == 0 and self.replay_buffer.size > 256):
             actor_loss, critic_loss = self.train()
             self.data_logger.log_training_info(self.episode_step, actor_loss, critic_loss, self.total_timesteps / self.max_timesteps)
 
@@ -141,12 +167,7 @@ class CatarobDRLAgentNode(Node):
                 'episode': self.episode_count
             }, self.total_timesteps)
         
-    def select_action(self, state, add_noise=False):                                                        # gets action from current state
-        action = self.agent.select_action(np.array(state))
-        if add_noise:                                                                                       # adds gaussian noise to encourage exploration
-            noise = np.random.normal(0, self.max_action * 0.1, size=self.action_dim)
-            action = np.clip(action + noise, -self.max_action, self.max_action)                             # clipped to stay within allowed range
-        return action
+    
     
     def train(self, batch_size=256):                                                                        #TODO set batch_size
         actor_loss, critic_loss = self.agent.train(self.replay_buffer, batch_size)                          # training algorithm set in the DRL algorithm files
@@ -160,7 +181,7 @@ class CatarobDRLAgentNode(Node):
             self.total_timesteps = metadata['total_timesteps']
             self.episode = metadata['episode']
 
-    # The main function remains unchanged
+    
 
 def main(args=None):
     rclpy.init(args=args)
