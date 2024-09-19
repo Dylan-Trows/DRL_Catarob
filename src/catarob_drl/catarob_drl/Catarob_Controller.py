@@ -7,11 +7,11 @@ from geometry_msgs.msg import Twist
 import math
 import numpy as np
 from .Waypoint_manager import WaypointManager
-from catarob_drl_interfaces.msg import VRXStepData
+from catarob_drl_interfaces.msg import CatarobStepData
 
-class RealCatarobController(Node):
+class CatarobController(Node):
     def __init__(self):
-        super().__init__('real_catarob_controller')
+        super().__init__('catarob_controller')
 
         # Define QoS profiles
         sensor_qos = QoSProfile(
@@ -40,7 +40,7 @@ class RealCatarobController(Node):
 
         # Publishers
         self.cmd_vel_pub = self.create_publisher(Twist, 'catarob/cmd_vel', reliable_qos)
-        self.step_publisher = self.create_publisher(VRXStepData, '/catarob/step_data', reliable_qos)
+        self.step_publisher = self.create_publisher(CatarobStepData, '/catarob/step_data', reliable_qos)
 
         # Control loop timer (4Hz to match sensor data rate)
         self.create_timer(0.25, self.control_loop)
@@ -128,7 +128,7 @@ class RealCatarobController(Node):
         reward = self.get_reward()
 
         if self.gps_data is not None and self.current_waypoint is not None:
-            step_data = RealCatarobStepData()
+            step_data = CatarobStepData()
             step_data.gps_data = self.gps_data
             step_data.current_heading = self.current_heading
             step_data.current_waypoint = self.current_waypoint
@@ -148,7 +148,7 @@ class RealCatarobController(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    controller = RealCatarobController()
+    controller = CatarobController()
     rclpy.spin(controller)
     controller.destroy_node()
     rclpy.shutdown()
