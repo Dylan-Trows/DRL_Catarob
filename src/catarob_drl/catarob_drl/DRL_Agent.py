@@ -97,13 +97,14 @@ class DRLAgentNode(Node):
         # Timer for training loop
         self.create_timer(0.1, self.training_loop)
 
-        self.current_state = None
-        self.last_action = None
+        self.previous_state = None
+        self.previous_action = None
         self.last_reward = None
         self.total_timesteps = 0
         self.max_timesteps = 1000000
         self.episode_step = 0
         self.episode_count = 0
+        self.episode_reward = 0.0
     
     def step_data_callback(self, msg):
         gps_data = np.array(msg.gps_data, dtype=np.float32)
@@ -112,28 +113,52 @@ class DRLAgentNode(Node):
         current_heading = np.array([msg.current_heading], dtype=np.float32)
         heading_error = np.array([msg.heading_error], dtype=np.float32)
         
-        self.current_state = np.concatenate([gps_data, imu_data, current_waypoint, current_heading, heading_error])
+        current_state = np.concatenate([gps_data, imu_data, current_waypoint, current_heading, heading_error])
+        reward =msg.reward
+        done = msg.task_finished
+
+        # Store transition if we have a previous state and action
+        if self.previous_state is not None and self.previous_action is not None:
+            self.store_transition(self.previous_state, self.previous_action, reward, current_state, done)
+
+        # Update previous state
+        self.previous_state = current_state
+
+        # Select and publish new action
+        action = self.select_action(current_state)
+        self.publish_action(action)
+
+        # Update previous action
+        self.previous_action = action
+
+        # Update episode information
+        self.episode_step += 1
+        self.episode_reward += reward
+
         self.last_reward = msg.reward
-        
-        if self.last_action is not None:
-            self.store_transition(self.last_action, self.last_reward, msg.task_finished)
-        
-        if msg.task_finished:
+
+        if done:
             self.end_episode()
     
-    def store_transition(self, action, reward, done):
-        self.replay_buffer.add(self.current_state, action, self.current_state, reward, done)         #  Stores the current transition (state, action, next_state, reward, done) in the replay buffer.
-        #self.performance_evaluator.log_step(reward)                                                 #  Logs the step's reward for performance evaluation.
-        self.episode_step += 1
+    def store_transition(self, state, action, reward, next_state, done):
+        self.replay_buffer.add(state, action, next_state, reward, done)         #  Stores the current transition (state, action, next_state, reward, done) in the replay buffer.
 
     def end_episode(self):
         self.episode_count += 1
-        self.get_logger().info(f"Episode {self.episode_count} finished. Steps: {self.episode_step}")
+        self.get_logger().info(f"Episode {self.episode_count} finished. Steps: {self.episode_step}, Reward: {self.episode_reward}")
         self.episode_step = 0
         # Add other episode-end logic
 
+    def publish_action(self, action):
+        # Publish action
+        action_msg = Float64MultiArray()
+        action_msg.data = action.tolist()
+        print("Action : ", action_msg.data)
+        self.action_pub.publish(action_msg)
+
+
     def training_loop(self):                                                    # called on timer 
-        if self.current_state is None:                                          # error check (if sim hasnt started yet ?)
+        if self.previous_state is None:                                          # error check (if sim hasnt started yet ?)
             return
 
 
@@ -143,19 +168,15 @@ class DRLAgentNode(Node):
         # else:
         #     action = self.select_action(self.current_state, add_noise=False)    # excouraging exploitation
 
-        action = self.select_action(self.current_state, add_noise=False) 
-        # Publish action
-        action_msg = Float64MultiArray()
-        action_msg.data = action.tolist()
-        print("Action : ", action_msg.data)
-        self.action_pub.publish(action_msg)
+        #action = self.select_action(self.current_state, add_noise=False) 
+        
 
         # Update training state
-        self.last_action = action
+        #self.last_action = action
         self.total_timesteps += 1
 
         # Train the agent
-        if self.testing_mode or (self.total_timesteps % 50 == 0 and self.replay_buffer.size > 256):    # trains periodically once enough samples in buffer
+        if not self.testing_mode and (self.total_timesteps % 50 == 0 and self.replay_buffer.size > 256):    # trains periodically once enough samples in buffer
             print("Training now")
             actor_loss, critic_loss = self.train()                                                        #TODO set self.total_timesteps + replay buffer length (batch size)
             print("training done")
