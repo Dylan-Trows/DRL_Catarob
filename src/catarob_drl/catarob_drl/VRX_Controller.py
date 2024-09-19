@@ -73,10 +73,10 @@ class VRXController(Node):
         if current_waypoint:
 
             if self.maximum_distance is None and self.previous_distance is None:
-                self.maximum_distance = self.waypoint_manager.calculate_distance(msg.latitude, msg.longitude, current_waypoint.latitude, current_waypoint.longitude)            # calculating maximum and previous distance to target
+                self.maximum_distance = self.waypoint_manager.calculate_distance(msg.latitude, msg.longitude, current_waypoint[0], current_waypoint[1])            # calculating maximum and previous distance to target
                 self.previous_distance = self.maximum_distance
             elif self.maximum_distance is not None:
-                self.previous_distance = self.waypoint_manager.calculate_distance(msg.latitude, msg.longitude, current_waypoint.latitude, current_waypoint.longitude)
+                self.previous_distance = self.waypoint_manager.calculate_distance(msg.latitude, msg.longitude, current_waypoint[0], current_waypoint[1])
 
             desired_heading = self.waypoint_manager.get_desired_heading(msg.latitude, msg.longitude)
             print("desired heading : ", desired_heading)
