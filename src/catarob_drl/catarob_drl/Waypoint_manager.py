@@ -85,7 +85,7 @@ class WaypointManager:
         x = math.cos(phi1) * math.sin(phi2) - \
             math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda)
         theta = math.atan2(y, x)
-        print("Theta = ", theta)                                                                # print statement for testing
+        #print("Theta = ", theta)                                                                # print statement for testing
         return (math.degrees(theta) + 360) % 360
 
     @staticmethod
@@ -93,3 +93,37 @@ class WaypointManager:
         """Calculate the smallest angle between current and desired heading."""
         error = desired_heading - current_heading
         return (error + 180) % 360 - 180
+    
+    @staticmethod
+    def latlon_to_xy(lat, lon, ref_lat, ref_lon):
+        """
+        Convert latitude and longitude to x, y coordinates.
+        
+        Args:
+        lat, lon: Coordinates to convert
+        ref_lat, ref_lon: Reference coordinates (origin of the xy plane)
+        
+        Returns:
+        x, y: Converted coordinates in meters
+        """
+        # Earth's radius in meters
+        R = 6371000
+        lat_rad = math.radians(lat)
+        lon_rad = math.radians(lon)
+        ref_lat_rad = math.radians(ref_lat)
+        ref_lon_rad = math.radians(ref_lon)
+        d_lat = lat_rad - ref_lat_rad
+        d_lon = lon_rad - ref_lon_rad
+        x = R * d_lon * math.cos(ref_lat_rad)
+        y = R * d_lat
+        return x, y
+    
+    @staticmethod
+    def magnetic_to_true_heading(magnetic_heading, declination=-26.6):
+        true_heading = ((magnetic_heading + declination + 360)%360)
+        return true_heading
+    
+    @staticmethod
+    def calculate_velocity(x1, y1, x2, y2, time_step):
+        distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+        return distance / time_step

@@ -5,7 +5,7 @@ from geometry_msgs.msg import Twist
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 import numpy as np
 import torch
-from catarob_drl_interfaces.msg import CatarobStepData
+from catarob_drl_interfaces.msg import CatarobState
 from .TD7 import Agent as TD7Agent
 class CatarobDRLAgentNodeOffline(Node):
     def __init__(self, testing_mode=False):
@@ -15,20 +15,20 @@ class CatarobDRLAgentNodeOffline(Node):
         self.declare_parameter('state_dim', 10)  # Update based on new state representation
         self.declare_parameter('action_dim', 2)
         self.declare_parameter('max_action', [2.0, 0.8])  # [linear velocity, angular velocity]
-        self.declare_parameter('algorithm', 'TD3')
         self.declare_parameter('model_path', '/path/to/your/saved/model')   # TODO add path
 
+        # Get parameters
+        self.state_dim = self.get_parameter('state_dim').value
+        self.action_dim = self.get_parameter('action_dim').value
+        self.max_action = np.array(self.get_parameter('max_action').value)
+        self.model_path = self.get_parameter('model_path').value
+        self.testing_mode = testing_mode
         self.declare_parameter('stage', 'Test')
         self.testing_mode = testing_mode
 
         # Initialize TD7 agent
         self.agent = TD7Agent(self.state_dim, self.action_dim, self.max_action)
         self.load_model()
-
-        # Get parameters
-        self.state_dim = self.get_parameter('state_dim').value
-        self.action_dim = self.get_parameter('action_dim').value
-        self.max_action = self.get_parameter('max_action').value
 
         # QoS profile       
         qos_profile = QoSProfile(                                                                                                           #TODO change the QoS profile for the catarob
@@ -37,11 +37,11 @@ class CatarobDRLAgentNodeOffline(Node):
             depth=1,
         )
 
-        # Update subscriptions and publishers
-        self.step_data_sub = self.create_subscription(
-            CatarobStepData,
-            '/catarob/step_data',
-            self.step_data_callback,
+        # Subscriptions and publishers
+        self.state_sub = self.create_subscription(
+            CatarobState,
+            '/catarob/state',
+            self.state_callback,
             qos_profile
         )
 
@@ -66,33 +66,29 @@ class CatarobDRLAgentNodeOffline(Node):
             self.get_logger().info(f"Model loaded successfully from {self.model_path}")
         except Exception as e:
             self.get_logger().error(f"Failed to load model: {str(e)}")
-    
-    def step_data_callback(self, msg):
-        # Update state representation
-        gps_data = np.array(msg.gps_data, dtype=np.float32)
-        current_heading = np.array([msg.current_heading], dtype=np.float32)
-        current_waypoint = np.array(msg.current_waypoint, dtype=np.float32)
-        heading_error = np.array([msg.heading_error], dtype=np.float32)
-        
-        current_state = np.concatenate([gps_data, current_heading, current_waypoint, heading_error])
 
-        reward = msg.reward
-        done = msg.task_finished
-
-        state = np.concatenate(msg)
-        # Update previous state
-        self.previous_state = current_state
+    def state_callback(self, msg):
+        # Process the state data
+        state = np.array([
+            msg.x,
+            msg.y,
+            msg.heading,
+            msg.heading_error,
+            msg.distance_to_waypoint,
+            msg.arc_length,
+            msg.velocity,
+            msg.waypoint_x,
+            msg.waypoint_y,
+            int(msg.done)
+        ])
 
         # Select action using the TD7 agent
         action = self.agent.select_action(state, use_checkpoint=self.testing_mode, use_exploration=False)
-        if done:
+        if msg.done:
             action = [0.0, 0.0]
-        self.publish_action(action)
 
-        # Update previous action
-        self.previous_action = action
-            
-        self.last_reward = msg.reward
+        # Publish action
+        self.publish_action(action)
         
     def publish_action(self, action):
         cmd_vel = Twist()

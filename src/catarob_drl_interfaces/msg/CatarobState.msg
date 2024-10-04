@@ -1,0 +1,10 @@
+float32 x
+float32 y
+float32 heading
+float32 heading_error
+float32 distance_to_waypoint
+float32 arc_length
+float32 velocity
+float32 waypoint_x
+float32 waypoint_y
+bool done
