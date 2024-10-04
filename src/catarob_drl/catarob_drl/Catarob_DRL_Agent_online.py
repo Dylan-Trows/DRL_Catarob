@@ -12,18 +12,25 @@ from .TD3_BC_test import TD3_BC
 from .Storage_manager import StorageManager
 from .Training_Logger import DataLogger
 from catarob_drl_interfaces.msg import CatarobStepData
+from .TD7 import Agent as TD7Agent
 
 class CatarobDRLAgentNode(Node):
     def __init__(self, testing_mode=False):
         super().__init__('catarob_drl_agent_node')
 
         # Update parameters
-        self.declare_parameter('state_dim', 8)  # Update based on new state representation
+        self.declare_parameter('state_dim', 10)  # Update based on new state representation
         self.declare_parameter('action_dim', 2)
-        self.declare_parameter('max_action', 2.0)  # Assuming normalized actions
+        self.declare_parameter('max_action', [2.0, 0.8])  # [linear velocity, angular velocity]
         self.declare_parameter('algorithm', 'TD3')
+        self.declare_parameter('model_path', '/path/to/your/saved/model')   # TODO add path
+
         self.declare_parameter('stage', 'Test')
         self.testing_mode = testing_mode
+
+        # Initialize TD7 agent
+        self.agent = TD7Agent(self.state_dim, self.action_dim, self.max_action)
+        self.load_model()
 
         # Get parameters
         self.state_dim = self.get_parameter('state_dim').value
@@ -68,6 +75,8 @@ class CatarobDRLAgentNode(Node):
             '/catarob/cmd_vel',
             qos_profile
         )
+
+        self.get_logger().info('Catarob DRL Agent Node initialized')
 
         # Timer for training loop (unchanged)
         self.create_timer(0.25, self.training_loop)  # 4 Hz to match sensor data rate

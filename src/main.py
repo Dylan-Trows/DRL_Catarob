@@ -27,6 +27,7 @@ def train_offline(RL_agent, args):
         'q_max': [],
         'q_min': [],
         'mse_from_perfect': [],
+        'mse_per_trajectory': [],
         'bc_loss': [],
         'q_value': [],
         'target_q_value': []
@@ -145,13 +146,17 @@ def evaluate_and_print(RL_agent, t, start_time, args, training_info, perfect_tra
 
     avg_mse_per_action, trajectory_mses = evaluate_on_perfect_trajectories(RL_agent, perfect_trajectories)
     print(f"Average MSE per action from perfect trajectories: {avg_mse_per_action:.5f}")
+    print(f"Average MSE per trajectory: {np.mean(trajectory_mses):.5f}")
     print(f"Total MSE per perfect trajectory i: {trajectory_mses:.5f}")
 
     additional_metrics = compute_additional_metrics(RL_agent)
     print(f"Behavioral Cloning Loss: {additional_metrics['bc_loss']:.5f}")
     print(f"Q-value - Mean: {additional_metrics['q_mean']:.5f}, Max: {additional_metrics['q_max']:.5f}, Min: {additional_metrics['q_min']:.5f}")
 
-    training_info['mse_from_perfect'].append(mse)
+    # Store the evaluation results
+    training_info['avg_mse_per_action'].append(avg_mse_per_action)
+    training_info['trajectory_mses'].append(trajectory_mses)
+
     training_info['bc_loss'].append(additional_metrics['bc_loss'])
     training_info['q_mean'].append(additional_metrics['q_mean'])
     training_info['q_max'].append(additional_metrics['q_max'])
@@ -169,31 +174,94 @@ def evaluate_and_print(RL_agent, t, start_time, args, training_info, perfect_tra
     print("---------------------------------------")
 
 
+# def plot_training_curves(training_info, save_dir):
+#     fig, axs = plt.subplots(3, 2, figsize=(15, 15))
+    
+#     axs[0, 0].plot(training_info['critic_loss'])
+#     axs[0, 0].set_title('Critic Loss')
+    
+#     axs[0, 1].plot(training_info['actor_loss'])
+#     axs[0, 1].set_title('Actor Loss')
+    
+#     axs[1, 0].plot(training_info['q_mean'])
+#     axs[1, 0].set_title('Mean Q-Value')
+    
+#     axs[1, 1].plot(training_info['mse_from_perfect'])
+#     axs[1, 1].set_title('MSE from Perfect Trajectories')
+    
+#     axs[2, 0].plot(training_info['bc_loss'])
+#     axs[2, 0].set_title('Behavioral Cloning Loss')
+    
+#     axs[2, 1].plot(training_info['q_value'], label='Q-Value')
+#     axs[2, 1].plot(training_info['target_q_value'], label='Target Q-Value')
+#     axs[2, 1].set_title('Q-Value vs Target Q-Value')
+#     axs[2, 1].legend()
+    
+#     plt.tight_layout()
+#     plt.savefig(f"{save_dir}/training_curves.png")
+#     plt.close()
+
 def plot_training_curves(training_info, save_dir):
-    fig, axs = plt.subplots(3, 2, figsize=(15, 15))
-    
-    axs[0, 0].plot(training_info['critic_loss'])
-    axs[0, 0].set_title('Critic Loss')
-    
-    axs[0, 1].plot(training_info['actor_loss'])
-    axs[0, 1].set_title('Actor Loss')
-    
-    axs[1, 0].plot(training_info['q_mean'])
-    axs[1, 0].set_title('Mean Q-Value')
-    
-    axs[1, 1].plot(training_info['mse_from_perfect'])
-    axs[1, 1].set_title('MSE from Perfect Trajectories')
-    
-    axs[2, 0].plot(training_info['bc_loss'])
-    axs[2, 0].set_title('Behavioral Cloning Loss')
-    
-    axs[2, 1].plot(training_info['q_value'], label='Q-Value')
-    axs[2, 1].plot(training_info['target_q_value'], label='Target Q-Value')
-    axs[2, 1].set_title('Q-Value vs Target Q-Value')
-    axs[2, 1].legend()
-    
+    # Create a directory for plots if it doesn't exist
+    plots_dir = f"{save_dir}/plots"
+    os.makedirs(plots_dir, exist_ok=True)
+
+    # Function to save individual plots
+    def save_plot(y, title, filename):
+        plt.figure(figsize=(10, 6))
+        plt.plot(y)
+        plt.title(title)
+        plt.xlabel('Evaluation Step')
+        plt.ylabel(title)
+        plt.savefig(f"{plots_dir}/{filename}.png")
+        plt.close()
+
+    # Critic Loss
+    save_plot(training_info['critic_loss'], 'Critic Loss', 'critic_loss')
+
+    # Actor Loss
+    save_plot(training_info['actor_loss'], 'Actor Loss', 'actor_loss')
+
+    # Mean Q-Value
+    save_plot(training_info['q_mean'], 'Mean Q-Value', 'mean_q_value')
+
+    # MSE from Perfect Trajectories (average per action)
+    save_plot(training_info['avg_mse_per_action'], 'Average MSE per Action', 'avg_mse_per_action')
+
+    # Behavioral Cloning Loss
+    save_plot(training_info['bc_loss'], 'Behavioral Cloning Loss', 'bc_loss')
+
+    # Q-Value vs Target Q-Value
+    plt.figure(figsize=(10, 6))
+    plt.plot(training_info['q_value'], label='Q-Value')
+    plt.plot(training_info['target_q_value'], label='Target Q-Value')
+    plt.title('Q-Value vs Target Q-Value')
+    plt.xlabel('Evaluation Step')
+    plt.ylabel('Q-Value')
+    plt.legend()
+    plt.savefig(f"{plots_dir}/q_value_vs_target.png")
+    plt.close()
+
+    # MSE for each trajectory
+    plt.figure(figsize=(12, 6))
+    trajectory_mses = np.array(training_info['trajectory_mses'])
+    for i in range(trajectory_mses.shape[1]):
+        plt.plot(trajectory_mses[:, i], label=f'Trajectory {i}')
+    plt.title('MSE for Each Trajectory')
+    plt.xlabel('Evaluation Step')
+    plt.ylabel('MSE')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
-    plt.savefig(f"{save_dir}/training_curves.png")
+    plt.savefig(f"{plots_dir}/trajectory_mses.png")
+    plt.close()
+
+    # Box plot of trajectory MSEs
+    plt.figure(figsize=(12, 6))
+    plt.boxplot(trajectory_mses)
+    plt.title('Distribution of Trajectory MSEs')
+    plt.xlabel('Evaluation Step')
+    plt.ylabel('MSE')
+    plt.savefig(f"{plots_dir}/trajectory_mses_boxplot.png")
     plt.close()
 
 if __name__ == "__main__":
@@ -218,5 +286,6 @@ if __name__ == "__main__":
 	max_action = np.array([2.0, 0.8])  
 
 	RL_agent = TD7.Agent(state_dim, action_dim, max_action, offline=True)
+    
 
 	train_offline(RL_agent, args)
