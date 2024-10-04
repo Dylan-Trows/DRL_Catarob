@@ -62,32 +62,50 @@ def train_offline(RL_agent, args):
 def evaluate_on_perfect_trajectories(RL_agent, perfect_trajectories):
 	# Evaluate the agent's performance on perfect trajectories
     total_mse = 0
+    total_actions = 0
+    trajectory_mses = []
+
     for trajectory in perfect_trajectories:
+        trajectory_mse = 0
         for state, perfect_action in trajectory:
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(RL_agent.device)
-            with torch.no_grad():
-                zs = RL_agent.encoder.zs(state_tensor)
-                predicted_action = RL_agent.actor(state_tensor, zs).cpu().numpy().flatten()
+            predicted_action = RL_agent.select_action(state, False, False)
             mse = np.mean((predicted_action - perfect_action)**2)
             total_mse += mse
-    return total_mse / len(perfect_trajectories)
+            total_actions += 1
+            trajectory_mse += mse
+        
+        trajectory_mses.append(trajectory_mse)
 
-def load_perfect_trajectories(dataset_dir, num_perfect_trajectories=6):
-	# Load perfect trajectories from the dataset
-	perfect_trajectories = []
-	for i in range(num_perfect_trajectories):
-		if i < 10:
-			file_path = os.path.join(dataset_dir, f'trajectory_0{i}.h5')
-		else:
-			file_path = os.path.join(dataset_dir, f'trajectory_{i}.h5')
-		with h5py.File(file_path, 'r') as f:
-			trajectory = []
-			for step in f.values():
-				state = step['state'][()]
-				action = step['action'][()]
-				trajectory.append((state, action))
-			perfect_trajectories.append(trajectory)
-	return perfect_trajectories
+    avg_mse_per_action = total_mse / total_actions if total_actions > 0 else 0
+
+    return avg_mse_per_action, trajectory_mses
+
+def load_perfect_trajectories(dataset_dir):
+    perfect_trajectory_numbers = list(range(8)) + [36, 37]  # 0-7, 36, 37
+    perfect_trajectories = []
+
+    for i in perfect_trajectory_numbers:
+        if i < 10:
+            file_path = os.path.join(dataset_dir, f'trajectory_0{i}.h5')
+        else:
+            file_path = os.path.join(dataset_dir, f'trajectory_{i}.h5')
+        
+        try:
+            with h5py.File(file_path, 'r') as f:
+                trajectory = []
+                for step in f.values():
+                    state = step['state'][()]
+                    action = step['action'][()]
+                    trajectory.append((state, action))
+                perfect_trajectories.append(trajectory)
+            print(f"Loaded perfect trajectory from {file_path}")
+        except FileNotFoundError:
+            print(f"Warning: Could not find file {file_path}")
+        except Exception as e:
+            print(f"Error loading file {file_path}: {str(e)}")
+
+    print(f"Loaded {len(perfect_trajectories)} perfect trajectories")
+    return perfect_trajectories
 
 def compute_additional_metrics(RL_agent):
 	# Compute additional metrics for evaluation
@@ -121,33 +139,34 @@ def compute_additional_metrics(RL_agent):
     }	
 
 def evaluate_and_print(RL_agent, t, start_time, args, training_info, perfect_trajectories):
-	print("---------------------------------------")
-	print(f"Evaluation at {t} time steps")
-	print(f"Total time passed: {round((time.time()-start_time)/60.,2)} min(s)")
-	
-	mse = evaluate_on_perfect_trajectories(RL_agent, perfect_trajectories)
-	print(f"MSE from perfect trajectories: {mse:.5f}")
-	
-	additional_metrics = compute_additional_metrics(RL_agent)
-	print(f"Behavioral Cloning Loss: {additional_metrics['bc_loss']:.5f}")
-	print(f"Q-value - Mean: {additional_metrics['q_mean']:.5f}, Max: {additional_metrics['q_max']:.5f}, Min: {additional_metrics['q_min']:.5f}")
+    print("---------------------------------------")
+    print(f"Evaluation at {t} time steps")
+    print(f"Total time passed: {round((time.time()-start_time)/60.,2)} min(s)")
 
-	training_info['mse_from_perfect'].append(mse)
-	training_info['bc_loss'].append(additional_metrics['bc_loss'])
-	training_info['q_mean'].append(additional_metrics['q_mean'])
-	training_info['q_max'].append(additional_metrics['q_max'])
-	training_info['q_min'].append(additional_metrics['q_min'])
-	
-	
-	if training_info['critic_loss']:
-		print(f"Average critic loss: {np.mean(training_info['critic_loss'][-args.eval_freq:]):.3f}")
-	if training_info['actor_loss']:
-		print(f"Average actor loss: {np.mean([l for l in training_info['actor_loss'][-args.eval_freq:] if l is not None]):.3f}")
-	if training_info['q_value']:
-		print(f"Average Q-value: {np.mean(training_info['q_value'][-args.eval_freq:]):.3f}")
-	if training_info['target_q_value']:
-		print(f"Average target Q-value: {np.mean(training_info['target_q_value'][-args.eval_freq:]):.3f}")
-	print("---------------------------------------")
+    avg_mse_per_action, trajectory_mses = evaluate_on_perfect_trajectories(RL_agent, perfect_trajectories)
+    print(f"Average MSE per action from perfect trajectories: {avg_mse_per_action:.5f}")
+    print(f"Total MSE per perfect trajectory i: {trajectory_mses:.5f}")
+
+    additional_metrics = compute_additional_metrics(RL_agent)
+    print(f"Behavioral Cloning Loss: {additional_metrics['bc_loss']:.5f}")
+    print(f"Q-value - Mean: {additional_metrics['q_mean']:.5f}, Max: {additional_metrics['q_max']:.5f}, Min: {additional_metrics['q_min']:.5f}")
+
+    training_info['mse_from_perfect'].append(mse)
+    training_info['bc_loss'].append(additional_metrics['bc_loss'])
+    training_info['q_mean'].append(additional_metrics['q_mean'])
+    training_info['q_max'].append(additional_metrics['q_max'])
+    training_info['q_min'].append(additional_metrics['q_min'])
+
+
+    if training_info['critic_loss']:
+        print(f"Average critic loss: {np.mean(training_info['critic_loss'][-args.eval_freq:]):.3f}")
+    if training_info['actor_loss']:
+        print(f"Average actor loss: {np.mean([l for l in training_info['actor_loss'][-args.eval_freq:] if l is not None]):.3f}")
+    if training_info['q_value']:
+        print(f"Average Q-value: {np.mean(training_info['q_value'][-args.eval_freq:]):.3f}")
+    if training_info['target_q_value']:
+        print(f"Average target Q-value: {np.mean(training_info['target_q_value'][-args.eval_freq:]):.3f}")
+    print("---------------------------------------")
 
 
 def plot_training_curves(training_info, save_dir):
@@ -180,10 +199,10 @@ def plot_training_curves(training_info, save_dir):
 if __name__ == "__main__":
 	
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--dataset_dir", default="Dataset1", type=str)
+	parser.add_argument("--dataset_dir", default="Dataset10hz", type=str)
 	parser.add_argument("--seed", default=0, type=int)
 	parser.add_argument("--eval_freq", default=5000, type=int)
-	parser.add_argument("--max_timesteps", default=50000, type=int)
+	parser.add_argument("--max_timesteps", default=1000000, type=int)
 	parser.add_argument("--save_dir", default="./saved_models", type=str)
 	args = parser.parse_args()
 

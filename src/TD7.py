@@ -338,18 +338,38 @@ class Agent(object):
 
 	def save(self, filename):
 		torch.save(self.actor.state_dict(), filename + "_actor")
+		torch.save(self.actor_target.state_dict(), filename + "_actor_target")
 		torch.save(self.critic.state_dict(), filename + "_critic")
+		torch.save(self.critic_target.state_dict(), filename + "_critic_target")
 		torch.save(self.encoder.state_dict(), filename + "_encoder")
+		torch.save(self.fixed_encoder.state_dict(), filename + "_fixed_encoder")
+		torch.save(self.fixed_encoder_target.state_dict(), filename + "_fixed_encoder_target")
 		torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
 		torch.save(self.critic_optimizer.state_dict(), filename + "_critic_optimizer")
 		torch.save(self.encoder_optimizer.state_dict(), filename + "_encoder_optimizer")
-
+		torch.save({
+			'training_steps': self.training_steps,
+			'max': self.max,
+			'min': self.min,
+			'max_target': self.max_target,
+			'min_target': self.min_target
+		}, filename + "_training_state")
+	
 	def load(self, filename):
 		self.actor.load_state_dict(torch.load(filename + "_actor"))
+		self.actor_target.load_state_dict(torch.load(filename + "_actor_target"))
 		self.critic.load_state_dict(torch.load(filename + "_critic"))
+		self.critic_target.load_state_dict(torch.load(filename + "_critic_target"))
 		self.encoder.load_state_dict(torch.load(filename + "_encoder"))
+		self.fixed_encoder.load_state_dict(torch.load(filename + "_fixed_encoder"))
+		self.fixed_encoder_target.load_state_dict(torch.load(filename + "_fixed_encoder_target"))
 		self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
 		self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer"))
 		self.encoder_optimizer.load_state_dict(torch.load(filename + "_encoder_optimizer"))
-		self.actor_target = copy.deepcopy(self.actor)
-		self.critic_target = copy.deepcopy(self.critic)
+
+		training_state = torch.load(filename + "_training_state")
+		self.training_steps = training_state['training_steps']
+		self.max = training_state['max']
+		self.min = training_state['min']
+		self.max_target = training_state['max_target']
+		self.min_target = training_state['min_target']

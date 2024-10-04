@@ -160,13 +160,6 @@ def interpolate_data(data, target_freq=4, headings = False):
             interpolated_column = wrap_to_360(np.rad2deg(interpolated_column))
         
         interpolated_values.append(interpolated_column)
-
-    # for i in range(values.shape[1]):
-    #     interp_func = interp1d(times, values[:, i], kind='linear', bounds_error=False, fill_value='extrapolate')
-    #     interpolated_values.append(interp_func(new_times))
-
-    # if headings:
-    #     interpolated_values = wrap_to_360((interpolated_values))
     
     return list(zip(new_times, *interpolated_values))
 
@@ -187,10 +180,10 @@ def align_and_convert_data(gps_data, heading_data, hull_data, final_waypoint, fa
     reward_calculator = RewardCalculator()
 
     # Upsample all data to 4 Hz
-    gps_data_upsampled = interpolate_data(gps_data)
-    heading_data_upsampled = interpolate_data(heading_data, 4, True)
-    hull_data_port_upsampled = interpolate_data(hull_data['PORT'])
-    hull_data_stbd_upsampled = interpolate_data(hull_data['STBD'])
+    gps_data_upsampled = interpolate_data(gps_data,10)
+    heading_data_upsampled = interpolate_data(heading_data, 10, True)
+    hull_data_port_upsampled = interpolate_data(hull_data['PORT'],10)
+    hull_data_stbd_upsampled = interpolate_data(hull_data['STBD'],10)
 
     # Get the shortest length among all upsampled data
     min_length = min(len(gps_data_upsampled), len(heading_data_upsampled), 
@@ -312,17 +305,13 @@ def compare_distance_calculations(lat1, lon1, lat2, lon2, ref_lat, ref_lon):
     print(f"X-Y distance: {xy_dist:.2f} m")
     print(f"Difference: {abs(haversine_dist - xy_dist):.2f} m")
 
-def main(args):
-
+def process_single_trajectory(bag_path, trajectory_type, name, output_dir):
+    
     GPS_middle_of_vlei = (-34.0898934162943, 18.466624778750354)        # using position of upsampled waypoint Perfect 01
     GPS_shore_of_vlei_start = (-34.09029552333333, 18.46672054)         # using ref position of gps data for perfect 01
-
-
-    # Process the bag file
-    bag_path = args.bag_folder
-    trajectory_type = args.trajectory_type
-    trajectory_name = 'trajectory_'+args.trajectory_name
-
+    #GPS_midlle_location_b = (-34.08994286, 18.46656999)                 # original waypoint in trajectory 36 location_b 
+    #GPS_Shore_location_b = (-34.090108566666665, 18.467099085)          # using ref position of trajectory 36 loction_b
+    
     gps_data, heading_data, hull_data = process_bag_file(bag_path)
 
     # Get reference point (first GPS point)
@@ -331,65 +320,160 @@ def main(args):
     # Adjust heading data for magnetic declination
     heading_data = magnetic_to_true_heading(heading_data, -26.6)
 
-    # Interpolate the data
-    gps_data_upsampled = interpolate_data(gps_data)
-    # for i in range(1, len(gps_data_upsampled), 10):  # Check every 100th point
-    #     lat1, lon1 = gps_data_upsampled[0][1], gps_data_upsampled[0][2]
-    #     lat2, lon2 = gps_data_upsampled[i][1], gps_data_upsampled[i][2]
-    #     print(f"\nComparing point 0 to point {i}:")
-    #     compare_distance_calculations(lat1, lon1, lat2, lon2, ref_lat, ref_lon)
-    
-    heading_data_upsampled = interpolate_data(heading_data,4,True)
-    heading_data_test = interpolate_data(heading_data,4)
-    print("Differences between wrap Heading: ")
-    for i in range (len(heading_data_test)):
-        print(heading_data_upsampled[i][1]," : ", heading_data_test[i][1])
-    hull_data_port_upsampled = interpolate_data(hull_data['PORT'])
-    hull_data_stbd_upsampled = interpolate_data(hull_data['STBD'])
-
-    # Plot comparisons
-    # Plot XY comparisons
-    Offline_dataset_utility.plot_xy_interpolation(gps_data, gps_data_upsampled, ref_lat, ref_lon, trajectory_type+'/'+trajectory_name)
-    Offline_dataset_utility.plot_gps_interpolation(gps_data, gps_data_upsampled, ref_lat, ref_lon, trajectory_type+'/'+trajectory_name)
-    Offline_dataset_utility.plot_interpolated_vs_original(heading_data, heading_data_upsampled, 'Heading', trajectory_type+'/'+trajectory_name)
-    Offline_dataset_utility.plot_interpolated_vs_original(hull_data['PORT'], hull_data_port_upsampled, 'Port PWM',trajectory_type+'/'+trajectory_name)
-    Offline_dataset_utility.plot_interpolated_vs_original(hull_data['STBD'], hull_data_stbd_upsampled, 'Starboard PWM',trajectory_type+'/'+trajectory_name)
-
     # Get the final GPS position as the destination waypoint
     final_waypoint = gps_data[-1][1:]  # lat, lon, alt of the last GPS point
     print("Position of Original waypoint in °: ", final_waypoint[0], final_waypoint[1])
     print("Position of Original waypoint :",Offline_dataset_utility.latlon_to_xy(final_waypoint[0],final_waypoint[1], ref_lat, ref_lon))
     print("Distance to Original waypoint: ", haversine((ref_lat, ref_lon), (final_waypoint[0], final_waypoint[1]), unit='m') )
 
+    # TODO
     # Align and convert data
-    #processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, final_waypoint)
-
+    processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, final_waypoint)
+    
     # for failure trajectories
-    processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, GPS_shore_of_vlei_start, True)
-
+    processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, GPS_middle_of_vlei, True)
+    
     Offline_dataset_utility.print_sample_data(processed_data)
     # Plot actual trajectory used
-    Offline_dataset_utility.plot_trajectory(processed_data, ref_point[0], ref_point[1],trajectory_type+'/'+trajectory_name)
+
+    # Plot actual trajectory used
+    Offline_dataset_utility.plot_trajectory(processed_data, ref_point[0], ref_point[1])
+
+    trajectory_name = "trajectory_" + name 
     # Save processed data
-    file = trajectory_name+'.h5'
-    filepath = os.path.join("/home/dylan_trows/Documents/Dataset1", file)
+    file = f'{trajectory_name}.h5'
+    filepath = os.path.join(output_dir, file)
     with h5py.File(filepath, 'w') as hf:
         for i, step in enumerate(processed_data):
-                step_group = hf.create_group(f'step_{i}')
-                step_group.create_dataset('state', data=step[0])
-                step_group.create_dataset('action', data=step[1])
-                step_group.create_dataset('reward', data=step[2])
-                step_group.create_dataset('next_state', data=step[3])
-                step_group.create_dataset('done', data=step[4])
-        
+            step_group = hf.create_group(f'step_{i}')
+            step_group.create_dataset('state', data=step[0])
+            step_group.create_dataset('action', data=step[1])
+            step_group.create_dataset('reward', data=step[2])
+            step_group.create_dataset('next_state', data=step[3])
+            step_group.create_dataset('done', data=step[4])
+    
     print(f"Saved trajectory to {filepath}")
     print(f"Processed {len(processed_data)} data points.")
 
+def main(args):
+
+    """# GPS_middle_of_vlei = (-34.0898934162943, 18.466624778750354)        # using position of upsampled waypoint Perfect 01
+    # GPS_shore_of_vlei_start = (-34.09029552333333, 18.46672054)         # using ref position of gps data for perfect 01
+    # #GPS_midlle_location_b = (-34.08994286, 18.46656999)                 # original waypoint in trajectory 36 location_b 
+    # #GPS_Shore_location_b = (-34.090108566666665, 18.467099085)          # using ref position of trajectory 36 loction_b
+
+    # # Process the bag file
+    # bag_path = args.bag_folder
+    # trajectory_type = args.trajectory_type
+    # trajectory_name = 'trajectory_'+args.trajectory_name
+
+    # gps_data, heading_data, hull_data = process_bag_file(bag_path)
+
+    # # Get reference point (first GPS point)
+    # ref_lat, ref_lon = gps_data[0][1], gps_data[0][2]
+
+    # # Adjust heading data for magnetic declination
+    # heading_data = magnetic_to_true_heading(heading_data, -26.6)
+
+    # Interpolate the data
+    # gps_data_upsampled = interpolate_data(gps_data)
+    # for i in range(1, len(gps_data_upsampled), 10):  # Check every 100th point
+    #     lat1, lon1 = gps_data_upsampled[0][1], gps_data_upsampled[0][2]
+    #     lat2, lon2 = gps_data_upsampled[i][1], gps_data_upsampled[i][2]
+    #     print(f"\nComparing point 0 to point {i}:")
+    #     compare_distance_calculations(lat1, lon1, lat2, lon2, ref_lat, ref_lon)
+    
+    # heading_data_upsampled = interpolate_data(heading_data,4,True)
+    # heading_data_test = interpolate_data(heading_data,4)
+    # print("Differences between wrap Heading: ")
+    # for i in range (len(heading_data_test)):
+    #     print(heading_data_upsampled[i][1]," : ", heading_data_test[i][1])
+    # hull_data_port_upsampled = interpolate_data(hull_data['PORT'])
+    # hull_data_stbd_upsampled = interpolate_data(hull_data['STBD'])
+
+    # Plot comparisons
+    # Plot XY comparisons
+    
+    Offline_dataset_utility.plot_xy_interpolation(gps_data, gps_data_upsampled, ref_lat, ref_lon, trajectory_type+'/'+trajectory_name)
+    Offline_dataset_utility.plot_gps_interpolation(gps_data, gps_data_upsampled, ref_lat, ref_lon, trajectory_type+'/'+trajectory_name)
+    Offline_dataset_utility.plot_interpolated_vs_original(heading_data, heading_data_upsampled, 'Heading', trajectory_type+'/'+trajectory_name)
+    Offline_dataset_utility.plot_interpolated_vs_original(hull_data['PORT'], hull_data_port_upsampled, 'Port PWM',trajectory_type+'/'+trajectory_name)
+    Offline_dataset_utility.plot_interpolated_vs_original(hull_data['STBD'], hull_data_stbd_upsampled, 'Starboard PWM',trajectory_type+'/'+trajectory_name)
+    
+    # # Get the final GPS position as the destination waypoint
+    # final_waypoint = gps_data[-1][1:]  # lat, lon, alt of the last GPS point
+    # print("Position of Original waypoint in °: ", final_waypoint[0], final_waypoint[1])
+    # print("Position of Original waypoint :",Offline_dataset_utility.latlon_to_xy(final_waypoint[0],final_waypoint[1], ref_lat, ref_lon))
+    # print("Distance to Original waypoint: ", haversine((ref_lat, ref_lon), (final_waypoint[0], final_waypoint[1]), unit='m') )
+
+    # TODO
+    # Align and convert data
+    # processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, final_waypoint)
+    
+    # # for failure trajectories
+    # #processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, GPS_middle_of_vlei, True)
+
+    # Offline_dataset_utility.print_sample_data(processed_data)
+    # # Plot actual trajectory used
+    # Offline_dataset_utility.plot_trajectory(processed_data, ref_point[0], ref_point[1])
+    # #Offline_dataset_utility.plot_trajectory(processed_data, ref_point[0], ref_point[1],trajectory_type+'/'+trajectory_name)
+    # # Save processed data
+    # file = trajectory_name+'.h5'
+    # filepath = os.path.join("/home/dylan_trows/Documents/dataset_auto_test", file)
+    # with h5py.File(filepath, 'w') as hf:
+    #     for i, step in enumerate(processed_data):
+    #             step_group = hf.create_group(f'step_{i}')
+    #             step_group.create_dataset('state', data=step[0])
+    #             step_group.create_dataset('action', data=step[1])
+    #             step_group.create_dataset('reward', data=step[2])
+    #             step_group.create_dataset('next_state', data=step[3])
+    #             step_group.create_dataset('done', data=step[4])
+        
+    # print(f"Saved trajectory to {filepath}")
+    # print(f"Processed {len(processed_data)} data points.")"""
+
+    
+    root_dir = args.root_folder
+    output_dir = args.output_folder
+
+    # Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
+    # trajectory_number = 
+    # process_single_trajectory(bag_path, "perfect", str(trajectory_number), output_dir)
+
+
+    # for trajectory_type in os.listdir(root_dir):
+    #     type_dir = os.path.join(root_dir, trajectory_type)
+    #     if os.path.isdir(type_dir):
+    #         for trajectory_name in os.listdir(type_dir):
+    #             trajectory_dir = os.path.join(type_dir, trajectory_name)
+    #             if os.path.isdir(trajectory_dir):
+    #                 # Find the bag file in this directory
+    #                 bag_files = [f for f in os.listdir(trajectory_dir) if f.endswith('.db3')]
+    #                 if bag_files:
+    #                     bag_path = os.path.join(trajectory_dir, bag_files[0])
+    #                     print(f"Processing trajectory: {trajectory_type}/{trajectory_name}")
+    #                     process_single_trajectory(bag_path, trajectory_type, trajectory_name, output_dir)
+    #                 else:
+    #                     print(f"No bag file found in {trajectory_dir}")
+
+    trajectory_number = 36
+    for bag_folder in sorted(os.listdir(root_dir)):
+        bag_path = os.path.join(root_dir, bag_folder)
+        if os.path.isdir(bag_path):
+            print(f"Processing trajectory {trajectory_number}: {bag_folder}")
+            process_single_trajectory(bag_path, "perfect", str(trajectory_number), output_dir)
+            trajectory_number += 1
+
+    print(f"Total trajectories processed: {trajectory_number}")
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process ROS bag file and generate trajectory data.")
-    parser.add_argument("bag_folder", help="Path to the ROS bag folder")
+    """parser.add_argument("bag_folder", help="Path to the ROS bag folder")
     parser.add_argument("trajectory_type", help="Type of the trajectory")
-    parser.add_argument("trajectory_name", help="Name of the trajectory")
+    parser.add_argument("trajectory_name", help="Name of the trajectory")"""
+
+    parser.add_argument("root_folder", help="Path to the root folder containing trajectory type folders")
+    parser.add_argument("output_folder", help="Path to the output folder for processed .h5 files")
     
     args = parser.parse_args()
 
