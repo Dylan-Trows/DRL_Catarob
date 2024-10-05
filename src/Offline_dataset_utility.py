@@ -11,7 +11,7 @@ import os
 
 # Earth's radius in meters
 R = 6371000
-base_path = '/home/dylan_trows/Documents/trajectory_plots'
+base_path = '/home/dylan_trows/Documents/trajectory_plots_10hz'
 
 jit(nopython=True)
 def latlon_to_xy(lat, lon, ref_lat, ref_lon):
@@ -150,7 +150,7 @@ def plot_trajectory(aligned_data, ref_lat, ref_lon, file_path = None):
     plt.show()
     
 
-def print_sample_data(aligned_data, num_samples=200):
+def print_sample_data(aligned_data, num_samples=400):
     print("\nSample of aligned data:")
     print("Time | State (Lat, Lon, Heading, heading error, dist, l arc, velocity, Way X, Way Y, done) | Action (Linear X, Angular Z) | Reward | Next State | done")
     for i, (state, action, reward, next_state, done) in enumerate(aligned_data[:num_samples]):

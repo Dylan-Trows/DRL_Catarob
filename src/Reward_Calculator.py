@@ -50,7 +50,9 @@ class RewardCalculator:
         normalized_l_arc = l_arc / (math.pi * current_distance)
         w_arc, w_dist = 0.5, 0.5
         distance = w_arc * normalized_l_arc + w_dist * normalized_d_target
-        distance_reward = -self.alpha * math.tanh(distance - 1)
+        #distance_reward = -self.alpha * math.tanh(distance - 1)
+        # simpler reward using function f(x) = 1 - x 
+        distance_reward = 1 - distance
 
         # Velocity reward
         """forward_speed = action[0]"""
@@ -67,7 +69,8 @@ class RewardCalculator:
         
         # Check if task is finished (reached the waypoint)
         if math.sqrt((current_x - waypoint[0])**2 + (current_y - waypoint[1])**2) < 1.0:
-            efficiency = ( (self.maximum_distance)/ (self.total_distance + current_distance) )
+            
+            efficiency = ( (self.maximum_distance - current_distance) / (self.total_distance) )
             print("Max distance: ", self.maximum_distance,", Total Distance: ",self.total_distance,", Efficiency: ",efficiency)
             reward += 100*efficiency
 

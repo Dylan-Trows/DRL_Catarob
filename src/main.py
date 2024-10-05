@@ -26,8 +26,8 @@ def train_offline(RL_agent, args):
         'q_mean': [],
         'q_max': [],
         'q_min': [],
-        'mse_from_perfect': [],
-        'mse_per_trajectory': [],
+        'avg_mse_per_action': [],
+        'mse_per_eval_trajectory': [],
         'bc_loss': [],
         'q_value': [],
         'target_q_value': []
@@ -147,7 +147,9 @@ def evaluate_and_print(RL_agent, t, start_time, args, training_info, perfect_tra
     avg_mse_per_action, trajectory_mses = evaluate_on_perfect_trajectories(RL_agent, perfect_trajectories)
     print(f"Average MSE per action from perfect trajectories: {avg_mse_per_action:.5f}")
     print(f"Average MSE per trajectory: {np.mean(trajectory_mses):.5f}")
-    print(f"Total MSE per perfect trajectory i: {trajectory_mses:.5f}")
+    print(f"Total MSE per perfect trajectory:")
+    for i, mse in enumerate(trajectory_mses):
+        print(f"  Trajectory {i}: {mse:.5f}")
 
     additional_metrics = compute_additional_metrics(RL_agent)
     print(f"Behavioral Cloning Loss: {additional_metrics['bc_loss']:.5f}")
@@ -155,7 +157,7 @@ def evaluate_and_print(RL_agent, t, start_time, args, training_info, perfect_tra
 
     # Store the evaluation results
     training_info['avg_mse_per_action'].append(avg_mse_per_action)
-    training_info['trajectory_mses'].append(trajectory_mses)
+    training_info['mse_per_eval_trajectory'].append(trajectory_mses)
 
     training_info['bc_loss'].append(additional_metrics['bc_loss'])
     training_info['q_mean'].append(additional_metrics['q_mean'])
