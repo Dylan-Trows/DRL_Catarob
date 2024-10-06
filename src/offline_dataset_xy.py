@@ -180,10 +180,10 @@ def align_and_convert_data(gps_data, heading_data, hull_data, final_waypoint, fa
     reward_calculator = RewardCalculator()
 
     # Upsample all data to 4 Hz
-    gps_data_upsampled = interpolate_data(gps_data,10)
-    heading_data_upsampled = interpolate_data(heading_data, 10, True)
-    hull_data_port_upsampled = interpolate_data(hull_data['PORT'],10)
-    hull_data_stbd_upsampled = interpolate_data(hull_data['STBD'],10)
+    gps_data_upsampled = interpolate_data(gps_data,4)
+    heading_data_upsampled = interpolate_data(heading_data, 4, True)
+    hull_data_port_upsampled = interpolate_data(hull_data['PORT'],4)
+    hull_data_stbd_upsampled = interpolate_data(hull_data['STBD'],4)
 
     # Get the shortest length among all upsampled data
     min_length = min(len(gps_data_upsampled), len(heading_data_upsampled), 
@@ -328,16 +328,21 @@ def process_single_trajectory(bag_path, trajectory_type, name, output_dir):
 
     # TODO
     # Align and convert data
-    processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, final_waypoint)
+    
     
     # for failure trajectories
-    processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, GPS_middle_of_vlei, True)
+    if trajectory_type == "failure middle" :
+        processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, GPS_middle_of_vlei, True)
+    elif trajectory_type == "failure shore" :
+        processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, GPS_shore_of_vlei_start, True)
+    else:
+        processed_data, ref_point = align_and_convert_data(gps_data, heading_data, hull_data, final_waypoint)
     
     Offline_dataset_utility.print_sample_data(processed_data)
     # Plot actual trajectory used
 
     # Plot actual trajectory used
-    Offline_dataset_utility.plot_trajectory(processed_data, ref_point[0], ref_point[1])
+    #Offline_dataset_utility.plot_trajectory(processed_data, ref_point[0], ref_point[1])
 
     trajectory_name = "trajectory_" + name 
     # Save processed data
@@ -435,6 +440,7 @@ def main(args):
     
     root_dir = args.root_folder
     output_dir = args.output_folder
+    trajectory_number = int(args.start_trajectory_number)
 
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
@@ -457,11 +463,17 @@ def main(args):
     #                 else:
     #                     print(f"No bag file found in {trajectory_dir}")
 
-    trajectory_number = 36
+    # bag_path = '/home/dylan_trows/Documents/dylan/failure/rosbag2_2024_09_20-11_36_35'
+    # process_single_trajectory(bag_path, "failure middle", str(trajectory_number), output_dir)
+
     for bag_folder in sorted(os.listdir(root_dir)):
         bag_path = os.path.join(root_dir, bag_folder)
         if os.path.isdir(bag_path):
             print(f"Processing trajectory {trajectory_number}: {bag_folder}")
+            # if trajectory_number % 2 == 0 :
+            #     process_single_trajectory(bag_path, "failure middle", str(trajectory_number), output_dir)
+            # else :
+            #     process_single_trajectory(bag_path, "failure shore", str(trajectory_number), output_dir)
             process_single_trajectory(bag_path, "perfect", str(trajectory_number), output_dir)
             trajectory_number += 1
 
@@ -474,7 +486,8 @@ if __name__ == "__main__":
 
     parser.add_argument("root_folder", help="Path to the root folder containing trajectory type folders")
     parser.add_argument("output_folder", help="Path to the output folder for processed .h5 files")
-    
+    parser.add_argument("start_trajectory_number", help="Trajectory number of the start of the root folder")
+
     args = parser.parse_args()
 
     main(args)

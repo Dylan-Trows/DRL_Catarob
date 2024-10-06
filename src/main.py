@@ -246,7 +246,7 @@ def plot_training_curves(training_info, save_dir):
 
     # MSE for each trajectory
     plt.figure(figsize=(12, 6))
-    trajectory_mses = np.array(training_info['trajectory_mses'])
+    trajectory_mses = np.array(training_info['mse_per_eval_trajectory'])
     for i in range(trajectory_mses.shape[1]):
         plt.plot(trajectory_mses[:, i], label=f'Trajectory {i}')
     plt.title('MSE for Each Trajectory')

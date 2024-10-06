@@ -72,7 +72,7 @@ class RewardCalculator:
             
             efficiency = ( (self.maximum_distance - current_distance) / (self.total_distance) )
             print("Max distance: ", self.maximum_distance,", Total Distance: ",self.total_distance,", Efficiency: ",efficiency)
-            reward += 100*efficiency
+            reward += 200*efficiency
 
         # Update previous_distance for next iteration
         self.previous_distance = current_distance
