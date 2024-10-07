@@ -63,8 +63,8 @@ class CatarobDRLAgentNodeOffline(Node):
     def load_model(self):
         try:
             # Load only the actor and encoder
-            self.agent.actor.load_state_dict(torch.load(self.model_path + "__iter_500000_actor"))
-            self.agent.fixed_encoder.load_state_dict(torch.load(self.model_path + "_iter_500000_encoder"))
+            self.agent.actor.load_state_dict(torch.load(self.model_path + "__iter_500000_actor.zip"))
+            self.agent.fixed_encoder.load_state_dict(torch.load(self.model_path + "_iter_500000_encoder.zip"))
             self.get_logger().info(f"Actor and encoder loaded successfully from {self.model_path}")
         except Exception as e:
             self.get_logger().error(f"Failed to load model: {str(e)}")
