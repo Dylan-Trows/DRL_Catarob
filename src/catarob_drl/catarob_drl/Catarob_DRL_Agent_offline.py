@@ -6,7 +6,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 import numpy as np
 import torch
 from catarob_drl_interfaces.msg import CatarobState
-from .TD7 import Agent as TD7Agent
+import TD7
 class CatarobDRLAgentNodeOffline(Node):
     def __init__(self, testing_mode=False):
         super().__init__('catarob_drl_agent_node')
@@ -27,7 +27,7 @@ class CatarobDRLAgentNodeOffline(Node):
         self.testing_mode = testing_mode
 
         # Initialize TD7 agent
-        self.agent = TD7Agent(self.state_dim, self.action_dim, self.max_action)
+        self.agent = TD7.Agent(self.state_dim, self.action_dim, self.max_action)
         self.load_model()
 
         # QoS profile       
