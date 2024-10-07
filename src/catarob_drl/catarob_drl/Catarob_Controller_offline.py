@@ -34,15 +34,15 @@ class CatarobController(Node):
         self.waypoint_manager.add_waypoint(-33.722499646, 150.674243934, 1.161502034)
 
         # Subscriptions
-        self.create_subscription(NavSatFix, '/sensor/emlid_gps_fix', self.gps_callback, sensor_qos)
+        self.create_subscription(NavSatFix, '/sensors/emlid_gps_fix', self.gps_callback, sensor_qos)
         self.create_subscription(Float64, '/sensors/mag_heading', self.heading_callback, sensor_qos)
         self.create_subscription(Twist, '/catarob/cmd_vel', self.action_callback, reliable_qos)
 
         # Publishers
         self.state_publisher = self.create_publisher(CatarobState, '/catarob/state', reliable_qos)
 
-        # Control loop timer (4Hz to match sensor data rate)
-        self.create_timer(0.25, self.control_loop)
+        # Control loop timer (10Hz to match sensor data rate)
+        self.create_timer(0.1, self.control_loop)
 
         # Initialize variables
         self.current_heading = None
@@ -103,6 +103,7 @@ class CatarobController(Node):
         waypoint_lat, waypoint_lon, _ = current_waypoint
 
         x, y = self.waypoint_manager.latlon_to_xy(lat, lon, self.ref_lat, self.ref_lon)
+        
         waypoint_x, waypoint_y = self.waypoint_manager.latlon_to_xy(waypoint_lat, waypoint_lon, self.ref_lat, self.ref_lon)
 
         desired_heading = self.waypoint_manager.calculate_bearing(lat, lon, waypoint_lat, waypoint_lon)
@@ -113,7 +114,7 @@ class CatarobController(Node):
 
         velocity = 0.0
         if self.prev_x is not None and self.prev_y is not None:
-            velocity = self.waypoint_manager.calculate_velocity(self.prev_x, self.prev_y, x, y, 0.25)  # 0.25 seconds for 4 Hz
+            velocity = self.waypoint_manager.calculate_velocity(self.prev_x, self.prev_y, x, y, 0.1)  # 0.1 seconds for 10 Hz
 
         done = distance_to_waypoint < 1.0 or not self.waypoint_manager.has_more_waypoints()
 
