@@ -15,7 +15,7 @@ class CatarobDRLAgentNodeOffline(Node):
         self.declare_parameter('state_dim', 10)  # Update based on new state representation
         self.declare_parameter('action_dim', 2)
         self.declare_parameter('max_action', [2.0, 0.8])  # [linear velocity, angular velocity]
-        self.declare_parameter('model_path', '/path/to/your/saved/model')   # TODO add path
+        self.declare_parameter('model_path', 'src/model_10hz_R1')   # TODO add path
 
         # Get parameters
         self.state_dim = self.get_parameter('state_dim').value
@@ -62,8 +62,10 @@ class CatarobDRLAgentNodeOffline(Node):
 
     def load_model(self):
         try:
-            self.agent.load(self.model_path)
-            self.get_logger().info(f"Model loaded successfully from {self.model_path}")
+            # Load only the actor and encoder
+            self.agent.actor.load_state_dict(torch.load(self.model_path + "__iter_500000_actor"))
+            self.agent.fixed_encoder.load_state_dict(torch.load(self.model_path + "_iter_500000_encoder"))
+            self.get_logger().info(f"Actor and encoder loaded successfully from {self.model_path}")
         except Exception as e:
             self.get_logger().error(f"Failed to load model: {str(e)}")
 
@@ -81,6 +83,7 @@ class CatarobDRLAgentNodeOffline(Node):
             msg.waypoint_y,
             int(msg.done)
         ])
+        
 
         # Select action using the TD7 agent
         action = self.agent.select_action(state, use_checkpoint=self.testing_mode, use_exploration=False)

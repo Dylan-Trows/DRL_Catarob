@@ -18,7 +18,7 @@ class CatarobController(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
-            durability=DurabilityPolicy.VOLATILE
+            #durability=DurabilityPolicy.VOLATILE
         )
 
         reliable_qos = QoSProfile(
@@ -36,7 +36,7 @@ class CatarobController(Node):
         # Subscriptions
         self.create_subscription(NavSatFix, '/sensors/emlid_gps_fix', self.gps_callback, sensor_qos)
         self.create_subscription(Float64, '/sensors/mag_heading', self.heading_callback, sensor_qos)
-        self.create_subscription(Twist, '/catarob/cmd_vel', self.action_callback, reliable_qos)
+        self.create_subscription(Twist, '/catarob/cmd_vel', self.action_callback, sensor_qos)
 
         # Publishers
         self.state_publisher = self.create_publisher(CatarobState, '/catarob/state', reliable_qos)
