@@ -22,6 +22,9 @@ setup(
         'console_scripts': [
             'drl_agent = catarob_drl.DRL_Agent:main',
             'vrx_controller = catarob_drl.VRX_Controller:main',
+            'catarob_controller = catarob_drl.Catarob_Controller_offline:main',
+            'catarob_drl_agent = catarob_drl.Catarob_DRL_Agent_offline:main',
+            'catarob_controller_experimental = catarob_drl.Catarob_controller_offline_experimental:main'
         ],
     },
 )

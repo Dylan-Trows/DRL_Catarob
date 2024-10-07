@@ -31,7 +31,7 @@ class CatarobController(Node):
 
         # Initialize WaypointManager
         self.waypoint_manager = WaypointManager()
-        self.waypoint_manager.add_waypoint(-33.722499646, 150.674243934, 1.161502034)  # Example waypoint
+        self.waypoint_manager.add_waypoint(-34.0898934162943, 18.466624778750354, 1.161502034)  # Example waypoint
 
         # Subscriptions
         self.create_subscription(NavSatFix, '/sensors/emlid_gps_fix', self.gps_callback, sensor_qos)

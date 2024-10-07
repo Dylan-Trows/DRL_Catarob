@@ -6,6 +6,8 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 import numpy as np
 import torch
 from catarob_drl_interfaces.msg import CatarobState
+import sys
+sys.path.append('/home/ros2/dylan_ws/src/')     # uncomment for use on the catarob
 import TD7
 class CatarobDRLAgentNodeOffline(Node):
     def __init__(self, testing_mode=False):
@@ -15,7 +17,7 @@ class CatarobDRLAgentNodeOffline(Node):
         self.declare_parameter('state_dim', 10)  # Update based on new state representation
         self.declare_parameter('action_dim', 2)
         self.declare_parameter('max_action', [2.0, 0.8])  # [linear velocity, angular velocity]
-        self.declare_parameter('model_path', 'src/model_10hz_R1')   # TODO add path
+        self.declare_parameter('model_path', '/home/ros2/dylan_ws/src/model_10hz_R1')   # TODO add path
 
         # Get parameters
         self.state_dim = self.get_parameter('state_dim').value
@@ -47,7 +49,7 @@ class CatarobDRLAgentNodeOffline(Node):
 
         self.action_pub = self.create_publisher(
             Twist,
-            '/catarob/cmd_vel',
+            '/platform/cmd_vel',
             qos_profile
         )
 
@@ -63,8 +65,8 @@ class CatarobDRLAgentNodeOffline(Node):
     def load_model(self):
         try:
             # Load only the actor and encoder
-            self.agent.actor.load_state_dict(torch.load(self.model_path + "__iter_500000_actor.zip"))
-            self.agent.fixed_encoder.load_state_dict(torch.load(self.model_path + "_iter_500000_encoder.zip"))
+            self.agent.actor.load_state_dict(torch.load(self.model_path + "/model_iter_500000_actor.zip", map_location=torch.device('cpu'), weights_only=True ))
+            self.agent.fixed_encoder.load_state_dict(torch.load(self.model_path + "/model_iter_500000_encoder.zip", map_location=torch.device('cpu'), weights_only=True))
             self.get_logger().info(f"Actor and encoder loaded successfully from {self.model_path}")
         except Exception as e:
             self.get_logger().error(f"Failed to load model: {str(e)}")

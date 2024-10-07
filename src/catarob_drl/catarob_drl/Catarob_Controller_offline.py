@@ -30,8 +30,8 @@ class CatarobController(Node):
         
         self.waypoint_manager = WaypointManager()
         # Add your real waypoints here
-        # TODO
-        self.waypoint_manager.add_waypoint(-33.722499646, 150.674243934, 1.161502034)
+        # TODO, 
+        self.waypoint_manager.add_waypoint(-34.0898934162943, 18.466624778750354, 1.161502034)
 
         # Subscriptions
         self.create_subscription(NavSatFix, '/sensors/emlid_gps_fix', self.gps_callback, sensor_qos)
@@ -83,7 +83,7 @@ class CatarobController(Node):
         self.gps_data = [msg.latitude, msg.longitude, msg.altitude]
         if self.ref_lat is None:
             self.ref_lat, self.ref_lon = msg.latitude, msg.longitude
-        self.waypoint_manager.update_position(msg.latitude, msg.longitude, msg.altitude)
+        #self.waypoint_manager.update_position(msg.latitude, msg.longitude, msg.altitude)
 
     def heading_callback(self, msg):
         self.current_heading = self.waypoint_manager.magnetic_to_true_heading(msg.data)
