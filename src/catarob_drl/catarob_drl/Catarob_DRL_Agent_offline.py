@@ -54,7 +54,7 @@ class CatarobDRLAgentNodeOffline(Node):
         self.get_logger().info('Catarob DRL Agent Node initialized')
 
         # Timer for training loop (unchanged)
-        self.create_timer(0.25, self.training_loop)  # 4 Hz to match sensor data rate
+        #self.create_timer(0.25, self.training_loop)  # 4 Hz to match sensor data rate
 
         # Initialize state variables (unchanged)
         self.previous_state = None
