@@ -19,7 +19,7 @@ class CatarobController(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
             depth=1,
-            durability=DurabilityPolicy.VOLATILE
+            #durability=DurabilityPolicy.VOLATILE
         )
 
         reliable_qos = QoSProfile(
@@ -29,9 +29,19 @@ class CatarobController(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL
         )
 
+        # Declare parameters for waypoints
+        self.declare_parameter('waypoint_lat', -34.0898934162943)
+        self.declare_parameter('waypoint_lon', 18.466624778750354)
+        self.declare_parameter('waypoint_alt', 4.7)
+
+        # Get waypoint parameters
+        waypoint_lat = self.get_parameter('waypoint_lat').value
+        waypoint_lon = self.get_parameter('waypoint_lon').value
+        waypoint_alt = self.get_parameter('waypoint_alt').value
+
         # Initialize WaypointManager
         self.waypoint_manager = WaypointManager()
-        self.waypoint_manager.add_waypoint(-34.0898934162943, 18.466624778750354, 1.161502034)  # Example waypoint
+        self.waypoint_manager.add_waypoint(waypoint_lat, waypoint_lon, waypoint_alt)  # Example waypoint
 
         # Subscriptions
         self.create_subscription(NavSatFix, '/sensors/emlid_gps_fix', self.gps_callback, sensor_qos)
