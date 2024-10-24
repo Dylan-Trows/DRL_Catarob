@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from catarob_drl_interfaces.msg import CatarobState
 import sys
-sys.path.append('/home/ros2/dylan_ws/src/')     # uncomment for use on the catarob
+#sys.path.append('/home/ros2/dylan_ws/src/')     # uncomment for use on the catarob
 import TD7
 class CatarobDRLAgentNodeOffline(Node):
     def __init__(self, testing_mode=False):
@@ -16,7 +16,7 @@ class CatarobDRLAgentNodeOffline(Node):
         # Update parameters
         self.declare_parameter('state_dim', 10)  # Update based on new state representation
         self.declare_parameter('action_dim', 2)
-        self.declare_parameter('max_action', [1.0, 0.8])  # [linear velocity, angular velocity]
+        self.declare_parameter('max_action', [2.0, 0.8])  # [linear velocity, angular velocity]
         self.declare_parameter('model_path', '/home/ros2/dylan_ws/src/model_10hz_R1')   # TODO add path
 
         # Declare parameters for model paths

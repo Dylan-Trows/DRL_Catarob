@@ -60,12 +60,8 @@ class RewardCalculator:
         speed_heading_reward = 0.5*(speed * math.cos(math.radians(heading_error))) / self.max_speed
         movement_reward = self.beta * speed_heading_reward
 
-        # Energy usage penalty
-        # energy_usage = np.sum(np.abs(action))
-        # energy_penalty = -0.1 * energy_usage
-
         # Calculate total reward
-        reward = distance_reward + movement_reward #+ energy_penalty
+        reward = distance_reward + movement_reward 
         
         # Check if task is finished (reached the waypoint)
         if math.sqrt((current_x - waypoint[0])**2 + (current_y - waypoint[1])**2) < 1.0:

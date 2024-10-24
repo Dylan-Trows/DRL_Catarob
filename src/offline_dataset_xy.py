@@ -318,7 +318,7 @@ def process_single_trajectory(bag_path, trajectory_type, name, output_dir):
     ref_lat, ref_lon = gps_data[0][1], gps_data[0][2]
 
     # Adjust heading data for magnetic declination
-    heading_data = magnetic_to_true_heading(heading_data, -26.6)
+    heading_data = magnetic_to_true_heading(heading_data, -26.1)
 
     # Get the final GPS position as the destination waypoint
     final_waypoint = gps_data[-1][1:]  # lat, lon, alt of the last GPS point
